@@ -77,7 +77,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
         {payments.length === 0 ? (
           <p className="text-sm text-graphite">No verified payments from this client yet.</p>
         ) : (
-          <Table head={["Received", "Milestone", "Client paid", "You received"]} align={["left", "left", "right", "right"]}>
+          <Table head={["Received", "Invoice", "Client paid", "You received"]} align={["left", "left", "right", "right"]}>
             {payments.map((p) => (
               <tr key={p.id}>
                 <Td className="text-graphite">{formatDate(p.earning.received_on)}</Td>

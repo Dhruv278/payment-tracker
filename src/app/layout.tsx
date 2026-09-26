@@ -11,7 +11,7 @@ const plexSans = IBM_Plex_Sans({
 
 export const metadata: Metadata = {
   title: { default: brand.name, template: `%s | ${brand.name}` },
-  description: "Projects, milestones and payments.",
+  description: "Projects, invoices and payments.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

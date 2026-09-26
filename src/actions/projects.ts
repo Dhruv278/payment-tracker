@@ -6,7 +6,7 @@ import { z } from "zod";
 import { authorizeDeveloper } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { removeDocuments } from "@/lib/storage";
-import type { ActionState, Milestone, PaymentRequest, Profile, Project } from "@/lib/types";
+import type { ActionState, PaymentRequest, Profile, Project } from "@/lib/types";
 
 const UNAUTHORIZED: ActionState = { error: "You are not allowed to do that." };
 
@@ -104,84 +104,4 @@ export async function deleteProject(_: ActionState, formData: FormData): Promise
 
   revalidatePath("/projects");
   redirect("/projects");
-}
-
-// ---------------------------------------------------------------------------
-// Milestones
-// ---------------------------------------------------------------------------
-
-const milestoneSchema = z.object({
-  title: z.string().trim().min(2, "Enter a milestone title.").max(160),
-  description: z.string().trim().max(2000).optional(),
-  amount: z.coerce.number("Enter an amount.").positive("Amount must be greater than zero."),
-  due_date: optionalDate,
-});
-
-async function milestoneTotalWarning(projectId: string, total: number, currency: string) {
-  const { data } = await createAdminClient().from("milestones").select("amount").eq("project_id", projectId);
-  const sum = (data ?? []).reduce((acc, m) => acc + Number(m.amount), 0);
-  return sum > total ? ` Note: milestones now total ${sum} ${currency}, more than the project price of ${total} ${currency}.` : "";
-}
-
-export async function addMilestone(_: ActionState, formData: FormData): Promise<ActionState> {
-  const dev = await authorizeDeveloper();
-  if (!dev) return UNAUTHORIZED;
-  const project = await ownedProject(dev.id, String(formData.get("project_id")));
-  if (!project) return { error: "Project not found." };
-  const parsed = milestoneSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-
-  const admin = createAdminClient();
-  const { count } = await admin.from("milestones").select("id", { count: "exact", head: true }).eq("project_id", project.id);
-  const { error } = await admin.from("milestones").insert({
-    ...parsed.data,
-    description: parsed.data.description || null,
-    project_id: project.id,
-    developer_id: dev.id,
-    position: count ?? 0,
-  });
-  if (error) return { error: error.message };
-
-  revalidatePath(`/projects/${project.id}`);
-  return { success: `Milestone added.${await milestoneTotalWarning(project.id, Number(project.total_amount), project.currency)}` };
-}
-
-async function editableMilestone(developerId: string, milestoneId: string) {
-  const admin = createAdminClient();
-  const { data: milestone } = await admin.from("milestones").select("*").eq("id", milestoneId).single<Milestone>();
-  if (!milestone || milestone.developer_id !== developerId) return { error: "Milestone not found." } as const;
-  const { count } = await admin.from("payment_requests").select("id", { count: "exact", head: true }).eq("milestone_id", milestone.id);
-  if (count) return { error: "A payment has already been requested for this milestone. Cancel the request first." } as const;
-  return { milestone } as const;
-}
-
-export async function updateMilestone(_: ActionState, formData: FormData): Promise<ActionState> {
-  const dev = await authorizeDeveloper();
-  if (!dev) return UNAUTHORIZED;
-  const result = await editableMilestone(dev.id, String(formData.get("milestone_id")));
-  if ("error" in result) return { error: result.error };
-  const parsed = milestoneSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-
-  const { error } = await createAdminClient()
-    .from("milestones")
-    .update({ ...parsed.data, description: parsed.data.description || null })
-    .eq("id", result.milestone.id);
-  if (error) return { error: error.message };
-
-  revalidatePath(`/projects/${result.milestone.project_id}`);
-  return { success: "Milestone updated." };
-}
-
-export async function deleteMilestone(_: ActionState, formData: FormData): Promise<ActionState> {
-  const dev = await authorizeDeveloper();
-  if (!dev) return UNAUTHORIZED;
-  const result = await editableMilestone(dev.id, String(formData.get("milestone_id")));
-  if ("error" in result) return { error: result.error };
-
-  const { error } = await createAdminClient().from("milestones").delete().eq("id", result.milestone.id);
-  if (error) return { error: error.message };
-
-  revalidatePath(`/projects/${result.milestone.project_id}`);
-  return { success: "Milestone deleted." };
 }

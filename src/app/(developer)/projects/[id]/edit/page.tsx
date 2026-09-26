@@ -24,7 +24,7 @@ export default async function EditProjectPage({ params }: PageProps<"/projects/[
       </Card>
       <Card title="Delete project" className="mt-6 max-w-2xl">
         <p className="mb-4 text-sm text-graphite">
-          Deleting removes the project, its milestones and any unverified payment requests. Projects with verified payments can&apos;t be deleted. Mark them as completed or cancelled instead.
+          Deleting removes the project and its unpaid invoices. Projects with verified payments can&apos;t be deleted. Mark them as completed or cancelled instead.
         </p>
         <ActionForm action={deleteProject}>
           <input type="hidden" name="project_id" value={project.id} />

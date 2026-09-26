@@ -97,3 +97,18 @@ together.
 
 Wise API sync, exchange rates, partial payments, multi-developer signup UI,
 recurring invoices, generated invoice PDFs.
+
+## Revision 2026-09-27: invoice-first flow
+
+Milestone planning (due dates, pre-created milestones, separate request step)
+was removed at the user's request. The app now works like a bill book:
+
+- Project page: price, invoiced, paid, not invoiced yet; list of invoices; a
+  **New invoice** form (title, amount, Wise link, optional PDF, note).
+- Sending an invoice saves it and immediately emails the client: amount,
+  Pay with Wise button, PDF attached, Upload payment confirmation button.
+- Statuses: Sent → Confirmation received → Paid. Invoices can be cancelled
+  until paid (client is emailed).
+- Storage is unchanged: an invoice is a `milestones` row (title, amount) plus
+  its `payment_requests` row. `milestones.due_date` is unused.
+- No automatic invoice numbers; the Wise invoice PDF carries its own number.

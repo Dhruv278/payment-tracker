@@ -172,9 +172,9 @@ export function Badge({ tone = "neutral", children }: { tone?: keyof typeof badg
 }
 
 export const milestoneMeta: Record<MilestoneStatus, { tone: keyof typeof badgeTones; label: string; clientLabel: string }> = {
-  pending: { tone: "neutral", label: "Not requested", clientLabel: "Upcoming" },
-  requested: { tone: "due", label: "Awaiting payment", clientLabel: "Payment due" },
-  proof_submitted: { tone: "review", label: "Proof to verify", clientLabel: "Being verified" },
+  pending: { tone: "neutral", label: "Not invoiced", clientLabel: "Upcoming" },
+  requested: { tone: "due", label: "Sent", clientLabel: "Payment due" },
+  proof_submitted: { tone: "review", label: "Confirmation received", clientLabel: "Being verified" },
   verified: { tone: "paid", label: "Paid", clientLabel: "Paid" },
 };
 

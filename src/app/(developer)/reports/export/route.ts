@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const { rows } = await buildReport(filters);
 
   const header = [
-    "Received on", "Client", "Company", "Project", "Milestone",
+    "Received on", "Client", "Company", "Project", "Invoice",
     "Billed amount", "Billed currency", "Net amount", "Net currency",
     "Client paid on", "Client reference", "Verified at", "Note",
   ];

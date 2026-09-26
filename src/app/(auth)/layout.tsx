@@ -15,10 +15,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
         <div className="mt-auto max-w-md">
           <p className="text-[2rem] font-semibold leading-[1.2] tracking-[-0.01em]">
-            Every milestone, invoice and payment in one place.
+            Every invoice and payment in one place.
           </p>
           <p className="mt-4 text-[0.9375rem] leading-relaxed text-white/70">
-            See what&apos;s been delivered, what&apos;s due and what&apos;s been paid, and send your payment receipts without digging through email.
+            See what&apos;s been invoiced, what&apos;s due and what&apos;s been paid, and send your payment confirmations without digging through email.
           </p>
           <TrackIllustration />
         </div>

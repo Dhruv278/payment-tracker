@@ -1,56 +1,54 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { TrackMilestone } from "@/components/payment-track";
-import { milestoneStatus, type Milestone, type PaymentEarning, type PaymentRequest, type Profile, type Project } from "@/lib/types";
+import type { Milestone, PaymentEarning, PaymentRequest, Profile, Project } from "@/lib/types";
 
 // All queries run with the signed-in user's session, so RLS scopes the rows.
 
-export type ProjectWithRelations = Project & {
-  client: Pick<Profile, "id" | "full_name" | "email" | "company">;
-  milestones: Pick<Milestone, "id" | "title" | "amount" | "position">[];
-  payment_requests: Pick<PaymentRequest, "id" | "status" | "amount" | "milestone_id">[];
+// Each invoice is stored as a milestone (its title) plus a payment request
+// (amount, Wise link, status). Milestones without a request are ignored.
+
+type InvoiceParts = {
+  milestones: Pick<Milestone, "id" | "title">[];
+  payment_requests: Pick<PaymentRequest, "id" | "status" | "amount" | "milestone_id" | "requested_at">[];
 };
+
+export type ProjectWithRelations = Project & { client: Pick<Profile, "id" | "full_name" | "email" | "company"> } & InvoiceParts;
 
 export type ProjectSummary = {
   total: number;
+  invoiced: number;
   paid: number;
-  awaiting: number; // requested or proof submitted, not yet verified
-  remaining: number;
-  milestoneCount: number;
-  milestoneTotal: number;
+  awaiting: number; // invoiced, not yet verified
+  notInvoiced: number;
+  remaining: number; // price minus paid
 };
 
-export function summarizeProject(p: Pick<ProjectWithRelations, "total_amount" | "milestones" | "payment_requests">): ProjectSummary {
+export function summarizeProject(p: Pick<Project, "total_amount"> & Pick<InvoiceParts, "payment_requests">): ProjectSummary {
   const total = Number(p.total_amount);
-  const paid = p.payment_requests.filter((r) => r.status === "verified").reduce((a, r) => a + Number(r.amount), 0);
-  const awaiting = p.payment_requests.filter((r) => r.status !== "verified").reduce((a, r) => a + Number(r.amount), 0);
+  const sum = (rows: typeof p.payment_requests) => rows.reduce((a, r) => a + Number(r.amount), 0);
+  const invoiced = sum(p.payment_requests);
+  const paid = sum(p.payment_requests.filter((r) => r.status === "verified"));
   return {
     total,
+    invoiced,
     paid,
-    awaiting,
+    awaiting: invoiced - paid,
+    notInvoiced: Math.max(0, total - invoiced),
     remaining: Math.max(0, total - paid),
-    milestoneCount: p.milestones.length,
-    milestoneTotal: p.milestones.reduce((a, m) => a + Number(m.amount), 0),
   };
 }
 
-/** Milestones in order with their derived payment status, for the payment track. */
-export function trackMilestones(p: {
-  milestones: Pick<Milestone, "id" | "title" | "amount" | "position">[];
-  payment_requests: Pick<PaymentRequest, "status" | "milestone_id">[];
-}): TrackMilestone[] {
-  return [...p.milestones]
-    .sort((a, b) => a.position - b.position)
-    .map((m) => ({
-      id: m.id,
-      title: m.title,
-      amount: Number(m.amount),
-      status: milestoneStatus(p.payment_requests.find((r) => r.milestone_id === m.id)),
-    }));
+/** Invoices in the order they were sent, for the payment track. */
+export function trackMilestones(p: InvoiceParts): TrackMilestone[] {
+  const titles = new Map(p.milestones.map((m) => [m.id, m.title]));
+  return [...p.payment_requests]
+    .sort((a, b) => a.requested_at.localeCompare(b.requested_at))
+    .map((r) => ({ id: r.id, title: titles.get(r.milestone_id) ?? "Invoice", amount: Number(r.amount), status: r.status }));
 }
 
 const PROJECT_WITH_RELATIONS =
-  "*, client:profiles!projects_client_id_fkey(id, full_name, email, company), milestones(id, title, amount, position), payment_requests(id, status, amount, milestone_id)";
+  "*, client:profiles!projects_client_id_fkey(id, full_name, email, company), milestones(id, title), payment_requests(id, status, amount, milestone_id, requested_at)";
 
 export async function listProjects(filter: { clientId?: string; status?: string } = {}) {
   const supabase = await createClient();

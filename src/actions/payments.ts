@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { authorizeClient, authorizeDeveloper } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -47,88 +48,120 @@ const optionalUrl = z
   .refine((v) => v === null || /^https?:\/\//i.test(v), "The Wise link must start with https://");
 
 // ---------------------------------------------------------------------------
-// Developer: request payment for a milestone
+// Developer: create and send an invoice
+// An invoice is stored as a milestone (title/amount) + its payment request.
 // ---------------------------------------------------------------------------
 
-const requestSchema = z.object({
-  milestone_id: z.uuid(),
+const invoiceSchema = z.object({
+  project_id: z.uuid(),
+  title: z.string().trim().min(2, "Give the invoice a title, e.g. Phase 1.").max(160),
+  amount: z.coerce.number("Enter the invoice amount.").positive("Amount must be greater than zero."),
   wise_link: optionalUrl,
   message: z.string().trim().max(2000).optional(),
 });
 
-export async function requestPayment(_: ActionState, formData: FormData): Promise<ActionState> {
+export async function createInvoice(_: ActionState, formData: FormData): Promise<ActionState> {
   const dev = await authorizeDeveloper();
   if (!dev) return UNAUTHORIZED;
-  const parsed = requestSchema.safeParse(Object.fromEntries(formData));
+  const parsed = invoiceSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { project_id, title, amount, wise_link, message } = parsed.data;
 
   const admin = createAdminClient();
-  const { data: milestone } = await admin
-    .from("milestones")
-    .select("*, project:projects(*, client:profiles!projects_client_id_fkey(email, full_name))")
-    .eq("id", parsed.data.milestone_id)
-    .single<Milestone & { project: Project & { client: Pick<Profile, "email" | "full_name"> } }>();
-  if (!milestone || milestone.developer_id !== dev.id) return { error: "Milestone not found." };
+  const { data: project } = await admin
+    .from("projects")
+    .select("*, client:profiles!projects_client_id_fkey(email, full_name, status)")
+    .eq("id", project_id)
+    .single<Project & { client: Pick<Profile, "email" | "full_name" | "status"> }>();
+  if (!project || project.developer_id !== dev.id) return { error: "Project not found." };
+  if (project.client.status !== "approved") return { error: "This client's account isn't approved, so they can't open the invoice." };
 
   const invoiceFile = formData.get("invoice");
-  if (!parsed.data.wise_link && !(invoiceFile instanceof File && invoiceFile.size > 0)) {
-    return { error: "Add a Wise payment link or attach an invoice so the client knows how to pay." };
-  }
-  const upload = await uploadDocument(invoiceFile, `${dev.id}/${milestone.project_id}/invoices`);
+  const fileName = invoiceFile instanceof File && invoiceFile.size > 0 ? invoiceFile.name : null;
+  if (!wise_link && !fileName) return { error: "Add your Wise payment link or attach the invoice PDF so the client knows how to pay." };
+  const upload = await uploadDocument(invoiceFile, `${dev.id}/${project.id}/invoices`);
   if (upload.error) return { error: upload.error };
+
+  const { count } = await admin.from("milestones").select("id", { count: "exact", head: true }).eq("project_id", project.id);
+  const { data: milestone, error: milestoneError } = await admin
+    .from("milestones")
+    .insert({ project_id: project.id, developer_id: dev.id, title, amount, position: count ?? 0 })
+    .select("id")
+    .single();
+  if (milestoneError) {
+    await removeDocuments([upload.path]);
+    return { error: milestoneError.message };
+  }
 
   const { data: created, error } = await admin
     .from("payment_requests")
     .insert({
       milestone_id: milestone.id,
-      project_id: milestone.project_id,
+      project_id: project.id,
       developer_id: dev.id,
-      client_id: milestone.project.client_id,
-      amount: milestone.amount,
-      currency: milestone.project.currency,
-      wise_link: parsed.data.wise_link,
-      message: parsed.data.message || null,
+      client_id: project.client_id,
+      amount,
+      currency: project.currency,
+      wise_link,
+      message: message || null,
       invoice_path: upload.path,
     })
     .select("id")
     .single();
   if (error) {
+    await admin.from("milestones").delete().eq("id", milestone.id);
     await removeDocuments([upload.path]);
-    return { error: error.code === "23505" ? "A payment was already requested for this milestone." : error.message };
+    return { error: error.message };
   }
 
-  const amount = formatMoney(milestone.amount, milestone.project.currency);
+  const formatted = formatMoney(amount, project.currency);
+  const portalPath = `/portal/payments/${created.id}`;
   sendEmail({
-    to: milestone.project.client.email,
+    to: project.client.email,
     replyTo: dev.email,
-    subject: `Payment request: ${amount} for ${milestone.project.name}`,
-    heading: `Payment requested — ${amount}`,
+    subject: `Invoice from ${dev.full_name || "your developer"}: ${formatted} for ${project.name}`,
+    heading: `${title} for ${project.name}`,
+    amount: formatted,
     lines: [
-      `Project: ${milestone.project.name}`,
-      `Milestone: ${milestone.title}`,
-      ...(parsed.data.message ? [parsed.data.message] : []),
-      "After paying, open the request and upload your payment receipt.",
+      ...(message ? [message] : []),
+      wise_link
+        ? "Pay securely with Wise using the button below. Once the payment is complete, upload the Wise payment confirmation PDF so it can be matched to this invoice."
+        : "The invoice is attached. Once you've paid, upload the payment confirmation PDF so it can be matched to this invoice.",
     ],
-    cta: { label: "View payment request", path: `/portal/payments/${created.id}` },
+    cta: wise_link ? { label: "Pay with Wise", path: wise_link } : { label: "Upload payment confirmation", path: portalPath },
+    secondaryCta: wise_link ? { label: "Upload payment confirmation", path: portalPath } : undefined,
+    attachments: upload.path && fileName ? [{ filename: fileName, storagePath: upload.path }] : undefined,
   });
 
-  revalidatePayment({ id: created.id, project_id: milestone.project_id });
-  return { success: `Payment of ${amount} requested. The client has been emailed.` };
+  revalidatePayment({ id: created.id, project_id: project.id });
+  return { success: `Invoice for ${formatted} sent to ${project.client.full_name || project.client.email}.` };
 }
 
-export async function cancelPaymentRequest(_: ActionState, formData: FormData): Promise<ActionState> {
+export async function cancelInvoice(_: ActionState, formData: FormData): Promise<ActionState> {
   const dev = await authorizeDeveloper();
   if (!dev) return UNAUTHORIZED;
   const request = await loadRequest(String(formData.get("request_id")));
-  if (!request || request.developer_id !== dev.id) return { error: "Payment request not found." };
-  if (request.status === "verified") return { error: "Verified payments can't be cancelled." };
+  if (!request || request.developer_id !== dev.id) return { error: "Invoice not found." };
+  if (request.status === "verified") return { error: "Paid invoices can't be cancelled." };
 
-  const { error } = await createAdminClient().from("payment_requests").delete().eq("id", request.id);
+  // Deleting the milestone cascades to its payment request.
+  const { error } = await createAdminClient().from("milestones").delete().eq("id", request.milestone_id);
   if (error) return { error: error.message };
   await removeDocuments([request.invoice_path, request.proof_path]);
 
+  sendEmail({
+    to: request.client.email,
+    replyTo: dev.email,
+    subject: `Invoice cancelled: ${request.milestone.title} (${request.project.name})`,
+    heading: "This invoice has been cancelled",
+    lines: [
+      `The invoice "${request.milestone.title}" for ${formatMoney(request.amount, request.currency)} on ${request.project.name} was cancelled. No payment is needed for it.`,
+      "If you already paid it, just reply to this email.",
+    ],
+  });
+
   revalidatePayment(request);
-  return { success: "Payment request cancelled. The milestone is back to not requested." };
+  redirect(`/projects/${request.project_id}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -149,11 +182,11 @@ export async function submitProof(_: ActionState, formData: FormData): Promise<A
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const request = await loadRequest(parsed.data.request_id);
-  if (!request || request.client_id !== client.id) return { error: "Payment request not found." };
+  if (!request || request.client_id !== client.id) return { error: "Invoice not found." };
   if (request.status === "verified") return { error: "This payment is already verified." };
 
   const proofFile = formData.get("proof");
-  if (!(proofFile instanceof File) || proofFile.size === 0) return { error: "Attach your payment receipt (PDF or image)." };
+  if (!(proofFile instanceof File) || proofFile.size === 0) return { error: "Attach the payment confirmation PDF (or a screenshot)." };
   const upload = await uploadDocument(proofFile, `${request.developer_id}/${request.project_id}/proofs`);
   if (upload.error) return { error: upload.error };
 
@@ -179,19 +212,19 @@ export async function submitProof(_: ActionState, formData: FormData): Promise<A
   const amount = formatMoney(request.amount, request.currency);
   sendEmail({
     to: request.developer.email,
-    subject: `Payment proof submitted: ${amount} — ${request.project.name}`,
-    heading: `${client.full_name || client.email} submitted payment proof`,
+    subject: `Payment confirmation received: ${amount} for ${request.project.name}`,
+    heading: `${client.full_name || client.email} uploaded a payment confirmation`,
     lines: [
       `Project: ${request.project.name}`,
-      `Milestone: ${request.milestone.title} (${amount})`,
-      `Paid on: ${parsed.data.client_paid_on}${parsed.data.client_reference ? ` · Ref: ${parsed.data.client_reference}` : ""}`,
-      "Check your Wise account and verify the payment.",
+      `Invoice: ${request.milestone.title} (${amount})`,
+      `Paid on: ${parsed.data.client_paid_on}${parsed.data.client_reference ? `, reference ${parsed.data.client_reference}` : ""}`,
+      "Check your Wise account, then verify the payment.",
     ],
     cta: { label: "Verify payment", path: `/payments/${request.id}` },
   });
 
   revalidatePayment(request);
-  return { success: "Thanks! Your payment proof was submitted for verification." };
+  return { success: "Thanks! Your payment confirmation was sent for verification." };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +246,7 @@ export async function verifyPayment(_: ActionState, formData: FormData): Promise
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const request = await loadRequest(parsed.data.request_id);
-  if (!request || request.developer_id !== dev.id) return { error: "Payment request not found." };
+  if (!request || request.developer_id !== dev.id) return { error: "Invoice not found." };
   if (request.status === "verified") return { error: "Already verified." };
 
   const admin = createAdminClient();
@@ -238,26 +271,26 @@ export async function verifyPayment(_: ActionState, formData: FormData): Promise
   sendEmail({
     to: request.client.email,
     replyTo: dev.email,
-    subject: `Payment received: ${amount} — ${request.project.name}`,
-    heading: "Payment confirmed — thank you!",
-    lines: [`Your payment of ${amount} for "${request.milestone.title}" (${request.project.name}) has been verified.`],
+    subject: `Payment received: ${amount} for ${request.project.name}`,
+    heading: "Payment confirmed. Thank you!",
+    lines: [`Your payment of ${amount} for "${request.milestone.title}" (${request.project.name}) has been received and verified.`],
     cta: { label: "View project", path: `/portal/projects/${request.project_id}` },
   });
 
   revalidatePayment(request);
   revalidatePath("/reports");
-  return { success: "Payment verified and milestone marked as paid." };
+  return { success: "Payment verified. The invoice is marked as paid." };
 }
 
 export async function rejectProof(_: ActionState, formData: FormData): Promise<ActionState> {
   const dev = await authorizeDeveloper();
   if (!dev) return UNAUTHORIZED;
   const reason = String(formData.get("reason") ?? "").trim();
-  if (reason.length < 3) return { error: "Tell the client why the proof was rejected." };
+  if (reason.length < 3) return { error: "Tell the client what is wrong with the confirmation." };
 
   const request = await loadRequest(String(formData.get("request_id")));
-  if (!request || request.developer_id !== dev.id) return { error: "Payment request not found." };
-  if (request.status !== "proof_submitted") return { error: "There is no submitted proof to reject." };
+  if (!request || request.developer_id !== dev.id) return { error: "Invoice not found." };
+  if (request.status !== "proof_submitted") return { error: "There is no payment confirmation to review." };
 
   const { error } = await createAdminClient()
     .from("payment_requests")
@@ -268,14 +301,14 @@ export async function rejectProof(_: ActionState, formData: FormData): Promise<A
   sendEmail({
     to: request.client.email,
     replyTo: dev.email,
-    subject: `Action needed: payment proof for ${request.project.name}`,
-    heading: "Your payment proof needs another look",
-    lines: [`Milestone: ${request.milestone.title} (${formatMoney(request.amount, request.currency)})`, `Reason: ${reason}`, "Please upload an updated receipt."],
-    cta: { label: "Update payment proof", path: `/portal/payments/${request.id}` },
+    subject: `Action needed: payment confirmation for ${request.project.name}`,
+    heading: "Please upload a new payment confirmation",
+    lines: [`Invoice: ${request.milestone.title} (${formatMoney(request.amount, request.currency)})`, reason],
+    cta: { label: "Upload new confirmation", path: `/portal/payments/${request.id}` },
   });
 
   revalidatePayment(request);
-  return { success: "Proof rejected. The client has been asked to resubmit." };
+  return { success: "The client has been asked for a new confirmation." };
 }
 
 /** Edit the private net-received record of a verified payment. */

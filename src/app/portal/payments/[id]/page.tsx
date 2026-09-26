@@ -10,12 +10,12 @@ import { formatDate, formatMoney, today } from "@/lib/format";
 export async function generateMetadata({ params }: PageProps<"/portal/payments/[id]">) {
   const { id } = await params;
   const payment = await getPayment(id);
-  return { title: payment ? payment.milestone.title : "Payment" };
+  return { title: payment ? payment.milestone.title : "Invoice" };
 }
 
 export default async function ClientPaymentPage({ params }: PageProps<"/portal/payments/[id]">) {
   const { id } = await params;
-  // RLS limits this to the signed-in client's own payment requests.
+  // RLS limits this to the signed-in client's own invoices.
   const payment = await getPayment(id);
   if (!payment) notFound();
 
@@ -35,12 +35,12 @@ export default async function ClientPaymentPage({ params }: PageProps<"/portal/p
         <div className="space-y-4">
           {payment.status === "requested" && payment.rejection_reason && (
             <Notice tone="due">
-              <p className="font-medium">Your previous receipt couldn&apos;t be matched</p>
+              <p className="font-medium">Please upload a new payment confirmation</p>
               <p className="mt-1">{payment.rejection_reason}</p>
             </Notice>
           )}
 
-          <Step n={1} title="Pay the amount" state={step > 1 ? "done" : "current"}>
+          <Step n={1} title="Pay the invoice" state={step > 1 ? "done" : "current"}>
             <p className="text-[0.9375rem] text-graphite">
               {payment.status === "requested" ? (
                 <>
@@ -72,13 +72,13 @@ export default async function ClientPaymentPage({ params }: PageProps<"/portal/p
             </div>
           </Step>
 
-          <Step n={2} title="Upload your payment receipt" state={step === 1 ? "current" : step > 2 ? "done" : "upcoming"}>
+          <Step n={2} title="Upload the payment confirmation" state={step === 1 ? "current" : step > 2 ? "done" : "upcoming"}>
             {payment.status === "verified" ? (
               <DetailList
                 items={[
                   ["Paid on", formatDate(payment.client_paid_on)],
                   ["Transfer reference", payment.client_reference || "—"],
-                  ["Receipt", proofUrl ? <a href={proofUrl} target="_blank" rel="noreferrer" className="text-[#27468a] underline underline-offset-4">Download</a> : "—"],
+                  ["Confirmation", proofUrl ? <a href={proofUrl} target="_blank" rel="noreferrer" className="text-[#27468a] underline underline-offset-4">Download</a> : "—"],
                 ]}
               />
             ) : payment.status === "proof_submitted" ? (
@@ -87,19 +87,19 @@ export default async function ClientPaymentPage({ params }: PageProps<"/portal/p
                   items={[
                     ["Paid on", formatDate(payment.client_paid_on)],
                     ["Transfer reference", payment.client_reference || "—"],
-                    ["Receipt", proofUrl ? <a href={proofUrl} target="_blank" rel="noreferrer" className="text-[#27468a] underline underline-offset-4">View receipt</a> : "—"],
+                    ["Confirmation", proofUrl ? <a href={proofUrl} target="_blank" rel="noreferrer" className="text-[#27468a] underline underline-offset-4">View</a> : "—"],
                     ["Sent", formatDate(payment.proof_submitted_at)],
                   ]}
                 />
                 <details className="mt-5">
-                  <summary className="cursor-pointer list-none text-sm font-medium text-graphite hover:text-ink">Sent the wrong file? Send a different receipt</summary>
+                  <summary className="cursor-pointer list-none text-sm font-medium text-graphite hover:text-ink">Uploaded the wrong file? Send a different one</summary>
                   <div className="mt-4">
-                    <ProofForm payment={payment} submitLabel="Send new receipt" />
+                    <ProofForm payment={payment} submitLabel="Send new confirmation" />
                   </div>
                 </details>
               </>
             ) : (
-              <ProofForm payment={payment} submitLabel="Send receipt" />
+              <ProofForm payment={payment} submitLabel="Send confirmation" />
             )}
           </Step>
 
@@ -108,8 +108,8 @@ export default async function ClientPaymentPage({ params }: PageProps<"/portal/p
               {payment.status === "verified"
                 ? `Confirmed on ${formatDate(payment.verified_at)}. Thank you!`
                 : payment.status === "proof_submitted"
-                  ? "Your receipt is being checked against the received transfer. You'll get an email once it's confirmed."
-                  : "Once your receipt is checked, this milestone is marked as paid and you'll get an email."}
+                  ? "Your payment confirmation is being checked. You'll get an email once the payment is confirmed."
+                  : "Once your payment confirmation is checked, this invoice is marked as paid and you'll get an email."}
             </p>
           </Step>
         </div>
@@ -124,7 +124,7 @@ export default async function ClientPaymentPage({ params }: PageProps<"/portal/p
                 <dd className="text-right font-medium">{payment.project.name}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-graphite">Requested</dt>
+                <dt className="text-graphite">Invoice sent</dt>
                 <dd className="font-medium">{formatDate(payment.requested_at)}</dd>
               </div>
               {payment.verified_at && (
@@ -153,7 +153,7 @@ function ProofForm({ payment, submitLabel }: { payment: NonNullable<Awaited<Retu
           <Input id="client_reference" name="client_reference" defaultValue={payment.client_reference ?? ""} />
         </Field>
       </div>
-      <Field label="Receipt" name="proof" hint="PDF or image, up to 4 MB">
+      <Field label="Wise payment confirmation" name="proof" hint="The PDF Wise gives you once the transfer is complete (or a screenshot), up to 4 MB">
         <Input id="proof" name="proof" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" required />
       </Field>
       <Field label="Note" name="client_note" hint="Optional">

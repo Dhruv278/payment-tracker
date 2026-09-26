@@ -28,7 +28,7 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
       {projects.length === 0 ? (
         <EmptyState
           title={current ? "No projects with this status" : "No projects yet"}
-          description="A project has a client, a price and milestones you request payment for."
+          description="A project has a client and a price. You send invoices against it as the work gets done."
           action={<ButtonLink href="/projects/new">New project</ButtonLink>}
         />
       ) : (

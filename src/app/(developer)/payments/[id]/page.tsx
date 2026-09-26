@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cancelPaymentRequest, rejectProof, updateEarning, verifyPayment } from "@/actions/payments";
+import { cancelInvoice, rejectProof, updateEarning, verifyPayment } from "@/actions/payments";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Card, DetailList, Field, Input, MilestoneBadge, Notice, PageHeader, Select, Textarea } from "@/components/ui";
 import { getPayment } from "@/lib/queries";
@@ -57,13 +57,13 @@ export default async function PaymentPage({ params }: PageProps<"/payments/[id]"
             </p>
             <EarningForm action={verifyPayment} requestId={payment.id} submitLabel="Mark as paid" variant="paid" />
           </Card>
-          <Card title="Receipt doesn't match?">
+          <Card title="Confirmation doesn't match?">
             <ActionForm action={rejectProof}>
               <input type="hidden" name="request_id" value={payment.id} />
               <Field label="Tell the client what's wrong" name="reason" hint="Included in the email to the client.">
                 <Textarea id="reason" name="reason" rows={3} placeholder="I can't find this transfer in Wise yet. Could you send the transfer confirmation?" required />
               </Field>
-              <SubmitButton variant="secondary" pendingLabel="Sending…">Ask for a new receipt</SubmitButton>
+              <SubmitButton variant="secondary" pendingLabel="Sending…">Ask for a new confirmation</SubmitButton>
             </ActionForm>
           </Card>
         </div>
@@ -96,7 +96,7 @@ export default async function PaymentPage({ params }: PageProps<"/payments/[id]"
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card title="Your request">
+        <Card title="Invoice">
           <DetailList
             items={[
               ["Amount", amount],
@@ -107,19 +107,19 @@ export default async function PaymentPage({ params }: PageProps<"/payments/[id]"
           />
           {payment.message && <p className="mt-5 whitespace-pre-line border-l-2 border-rule pl-4 text-sm leading-relaxed text-graphite">{payment.message}</p>}
           {payment.status !== "verified" && (
-            <ActionForm action={cancelPaymentRequest} className="mt-5 border-t border-rule-soft pt-4">
+            <ActionForm action={cancelInvoice} className="mt-5 border-t border-rule-soft pt-4">
               <input type="hidden" name="request_id" value={payment.id} />
-              <SubmitButton variant="ghost" className="!px-0 !text-danger hover:!bg-transparent" confirm="Cancel this payment request? The milestone goes back to not requested.">
-                Cancel request
+              <SubmitButton variant="ghost" className="!px-0 !text-danger hover:!bg-transparent" confirm="Cancel this invoice? It will be removed and the client can no longer pay it.">
+                Cancel invoice
               </SubmitButton>
             </ActionForm>
           )}
         </Card>
 
-        <Card title="Client's receipt">
+        <Card title="Payment confirmation">
           {payment.status === "requested" && payment.rejection_reason && (
             <div className="mb-4">
-              <Notice tone="due">You asked for a new receipt: {payment.rejection_reason}</Notice>
+              <Notice tone="due">You asked for a new confirmation: {payment.rejection_reason}</Notice>
             </div>
           )}
           {payment.proof_submitted_at ? (
@@ -129,13 +129,13 @@ export default async function PaymentPage({ params }: PageProps<"/payments/[id]"
                   ["Paid on", formatDate(payment.client_paid_on)],
                   ["Sent", formatDate(payment.proof_submitted_at)],
                   ["Transfer reference", payment.client_reference || "—"],
-                  ["Receipt", proofUrl ? <a href={proofUrl} target="_blank" rel="noreferrer" className={linkClass}>Open receipt</a> : "—"],
+                  ["Confirmation PDF", proofUrl ? <a href={proofUrl} target="_blank" rel="noreferrer" className={linkClass}>Open</a> : "—"],
                 ]}
               />
               {payment.client_note && <p className="mt-5 whitespace-pre-line border-l-2 border-rule pl-4 text-sm leading-relaxed text-graphite">{payment.client_note}</p>}
             </>
           ) : (
-            <p className="text-sm text-graphite">No receipt yet. You&apos;ll get an email when {displayName(payment.client)} sends one.</p>
+            <p className="text-sm text-graphite">Not uploaded yet. You&apos;ll get an email when {displayName(payment.client)} uploads the Wise payment confirmation.</p>
           )}
         </Card>
       </div>

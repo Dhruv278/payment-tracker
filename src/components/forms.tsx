@@ -1,12 +1,19 @@
 "use client";
 
-import { createContext, startTransition, useActionState, useContext, useEffect, useRef, type ReactNode } from "react";
+import { createContext, startTransition, useActionState, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { buttonStyles, cn } from "@/components/ui";
 import type { ActionState } from "@/lib/types";
 
 type Action = (state: ActionState, formData: FormData) => Promise<ActionState>;
 
 const PendingContext = createContext(false);
+
+const noopSubscribe = () => () => {};
+
+/** False during SSR and before hydration, so forms can't be submitted natively (as a GET) before React takes over. */
+function useHydrated() {
+  return useSyncExternalStore(noopSubscribe, () => true, () => false);
+}
 
 /**
  * Form wired to a server action with inline error/success feedback.
@@ -34,6 +41,7 @@ export function ActionForm({
   return (
     <form
       ref={formRef}
+      method="post"
       className={cn("space-y-4", className)}
       onSubmit={(event) => {
         event.preventDefault();
@@ -70,10 +78,11 @@ export function SubmitButton({
   pendingLabel?: string;
 }) {
   const pending = useContext(PendingContext);
+  const hydrated = useHydrated();
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || !hydrated}
       aria-busy={pending}
       className={cn(buttonStyles[variant], className)}
       onClick={(e) => {

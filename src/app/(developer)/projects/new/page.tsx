@@ -11,7 +11,7 @@ export default async function NewProjectPage({ searchParams }: PageProps<"/proje
 
   return (
     <>
-      <PageHeader back={{ href: "/projects", label: "Projects" }} title="New project" description="Choose the client and set the total price. You can split it into milestones next." />
+      <PageHeader back={{ href: "/projects", label: "Projects" }} title="New project" description="Choose the client and set the total price. You can send invoices from the project page." />
       {clients.length === 0 ? (
         <EmptyState title="You need an approved client first" action={<ButtonLink href="/clients">Go to clients</ButtonLink>} />
       ) : (

@@ -10,13 +10,14 @@ Design: [`docs/superpowers/specs/2026-09-26-freelance-payment-tracker-design.md`
 
 ## How it works
 
-1. Client signs up → you get an email → you approve on **Clients** (or invite them directly).
-2. Create a **Project** for the client with its total price and currency (e.g. $1600 USD).
-3. Add **Milestones** (e.g. $400 — Phase 1).
-4. When a milestone is done, **Request payment**: attach your Wise payment link and/or invoice PDF. The client is emailed.
-5. Client pays, then uploads the receipt PDF + date + Wise reference. You're emailed.
-6. You **verify** and record the net amount you received — any currency, e.g. ₹36,000 or $350. Clients never see this.
-7. **Reports** show billed vs. net earned by client, project and date range (incl. Indian FY presets), with CSV export.
+It works like a bill book:
+
+1. Client signs up and you approve them on **Clients** (or invite them directly).
+2. Create a **Project** for the client with its total price and currency (e.g. $1,600 USD).
+3. When part of the work is done, **Send invoice** from the project page: title, amount (e.g. $400), your Wise payment link and optionally the invoice PDF. The client gets an email with a **Pay with Wise** button, the PDF attached and an **Upload payment confirmation** button.
+4. Client pays and uploads the Wise payment-completed PDF. You get an email.
+5. You **verify** it and record what actually reached you, in any currency (e.g. ₹36,000). Clients never see this. Or ask for a new confirmation.
+6. Each project shows price, invoiced, paid and not-invoiced-yet. **Reports** show billed vs. net earned by client, project and date range (incl. Indian FY presets), with CSV export.
 
 ## Run locally (no cloud accounts needed)
 
@@ -71,4 +72,4 @@ Then `npm run dev` and open http://localhost:3000.
 - **Files:** PDFs/images up to 4 MB, stored in a private bucket, downloaded via 10-minute signed URLs.
 - **Multiple developers later:** every record already has a `developer_id`. Add more emails to `DEVELOPER_EMAILS` — each developer only sees their own clients and projects. (New self sign-ups are visible to every developer until one approves them; per-developer invite links would be the next step.)
 - **Invites & sign-in links:** the app sends its own branded invite and "new sign-in link" emails (Clients → client → *Send a new sign-in link*) — useful when an invite expires or a client forgets their password.
-- **Partial payments** aren't supported by design — one payment request per milestone. Split work into more milestones instead.
+- **Invoices** can be cancelled until they are paid (the client gets a cancellation email). Each invoice is paid in full: no partial payments.

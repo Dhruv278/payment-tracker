@@ -117,7 +117,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
           </div>
 
           <Card title="All payments" className="mt-6">
-            <Table head={["Received", "Milestone", "Client", "Client paid", "You received", "Note"]} align={["left", "left", "left", "right", "right", "left"]}>
+            <Table head={["Received", "Invoice", "Client", "Client paid", "You received", "Note"]} align={["left", "left", "left", "right", "right", "left"]}>
               {report.rows.map((r) => (
                 <tr key={r.id}>
                   <Td className="text-graphite">{formatDate(r.earning.received_on)}</Td>

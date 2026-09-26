@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { addMilestone, deleteMilestone, updateMilestone } from "@/actions/projects";
-import { requestPayment } from "@/actions/payments";
+import { createInvoice } from "@/actions/payments";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { PaymentTrack } from "@/components/payment-track";
-import { ButtonLink, Card, EmptyState, Field, Figure, FigureRow, Input, MilestoneBadge, PageHeader, ProjectBadge, Textarea, buttonStyles, cn } from "@/components/ui";
+import { ButtonLink, Card, Field, Figure, FigureRow, Input, MilestoneBadge, PageHeader, ProjectBadge, Textarea } from "@/components/ui";
 import { summarizeProject, trackMilestones } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
 import { displayName, formatDate, formatMoney } from "@/lib/format";
@@ -12,7 +11,7 @@ import type { Milestone, PaymentRequest, Profile, Project } from "@/lib/types";
 
 type ProjectDetail = Project & {
   client: Pick<Profile, "id" | "full_name" | "email" | "company">;
-  milestones: Milestone[];
+  milestones: Pick<Milestone, "id" | "title">[];
   payment_requests: PaymentRequest[];
 };
 
@@ -28,17 +27,15 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const supabase = await createClient();
   const { data: project } = await supabase
     .from("projects")
-    .select("*, client:profiles!projects_client_id_fkey(id, full_name, email, company), milestones(*), payment_requests(*)")
+    .select("*, client:profiles!projects_client_id_fkey(id, full_name, email, company), milestones(id, title), payment_requests(*)")
     .eq("id", id)
-    .order("position", { referencedTable: "milestones" })
     .maybeSingle<ProjectDetail>();
   if (!project) notFound();
 
   const s = summarizeProject(project);
   const money = (n: number) => formatMoney(n, project.currency);
-  const track = trackMilestones(project);
-  const unallocated = s.total - s.milestoneTotal;
-  const nextToRequest = track.findIndex((m) => m.status === "pending");
+  const titles = new Map(project.milestones.map((m) => [m.id, m.title]));
+  const invoices = [...project.payment_requests].sort((a, b) => a.requested_at.localeCompare(b.requested_at));
 
   return (
     <>
@@ -51,175 +48,96 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
               {displayName(project.client)}
             </Link>
             <ProjectBadge status={project.status} />
-            {project.start_date && (
-              <span>
-                {formatDate(project.start_date)} to {formatDate(project.end_date)}
-              </span>
-            )}
           </span>
         }
         actions={<ButtonLink variant="secondary" href={`/projects/${project.id}/edit`}>Edit project</ButtonLink>}
       />
 
       <Card className="mb-6">
-        <PaymentTrack milestones={track} total={s.total} currency={project.currency} />
-        {unallocated < 0 && (
-          <p className="mt-3 text-sm text-danger">Milestones add up to {money(-unallocated)} more than the project price.</p>
-        )}
+        <PaymentTrack milestones={trackMilestones(project)} total={s.total} currency={project.currency} />
       </Card>
 
       <FigureRow className="mb-8">
         <Figure label="Project price" value={money(s.total)} />
-        <Figure label="Collected" value={money(s.paid)} tone="paid" />
-        <Figure label="Requested, not yet paid" value={money(s.awaiting)} tone={s.awaiting ? "due" : undefined} />
-        <Figure label="Remaining" value={money(s.remaining)} />
+        <Figure label="Invoiced" value={money(s.invoiced)} hint={s.awaiting ? `${money(s.awaiting)} not paid yet` : undefined} />
+        <Figure label="Paid" value={money(s.paid)} tone="paid" />
+        <Figure label="Not invoiced yet" value={money(s.notInvoiced)} />
       </FigureRow>
 
-      {project.description && <p className="mb-8 max-w-prose whitespace-pre-line text-[0.9375rem] leading-relaxed text-graphite">{project.description}</p>}
-
-      <h2 className="mb-3 text-lg font-semibold">Milestones</h2>
-      {project.milestones.length === 0 ? (
-        <EmptyState title="No milestones yet" description="Split the price into milestones below, then request payment as each one is delivered." />
-      ) : (
-        <ol className="overflow-hidden rounded-xl border border-rule bg-paper">
-          {project.milestones.map((m, index) => {
-            const request = project.payment_requests.find((r) => r.milestone_id === m.id);
-            const status = track[index]?.status ?? "pending";
-            return (
-              <li key={m.id} className="border-b border-rule-soft px-6 py-5 last:border-b-0">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex min-w-0 gap-4">
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "figures mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                        status === "verified" ? "bg-paid text-white" : "border border-rule text-graphite",
-                      )}
-                    >
-                      {status === "verified" ? "✓" : index + 1}
-                    </span>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <section>
+          <h2 className="mb-3 text-lg font-semibold">Invoices</h2>
+          {invoices.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-rule bg-paper/60 px-6 py-10 text-center">
+              <p className="font-medium">No invoices yet</p>
+              <p className="mx-auto mt-1 max-w-sm text-sm text-graphite">
+                When a part of the work is done, create an invoice for that amount. {displayName(project.client)} gets it by email with your Wise link.
+              </p>
+            </div>
+          ) : (
+            <ul className="overflow-hidden rounded-xl border border-rule bg-paper">
+              {invoices.map((inv) => (
+                <li key={inv.id} className="border-b border-rule-soft last:border-b-0">
+                  <Link href={`/payments/${inv.id}`} className="group flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-desk/40">
                     <div className="min-w-0">
-                      <p className="font-medium">{m.title}</p>
-                      {m.description && <p className="mt-0.5 whitespace-pre-line text-sm text-graphite">{m.description}</p>}
-                      <p className="mt-1 text-sm text-graphite">
-                        {request
-                          ? request.status === "verified"
-                            ? `Paid, confirmed ${formatDate(request.verified_at)}`
-                            : request.status === "proof_submitted"
-                              ? `Receipt received ${formatDate(request.proof_submitted_at)}`
-                              : `Requested ${formatDate(request.requested_at)}${request.rejection_reason ? ", receipt rejected and waiting for a new one" : ""}`
-                          : m.due_date
-                            ? `Target ${formatDate(m.due_date)}`
-                            : null}
+                      <p className="truncate font-medium group-hover:underline">{titles.get(inv.milestone_id) ?? "Invoice"}</p>
+                      <p className="text-sm text-graphite">
+                        {inv.status === "verified"
+                          ? `Sent ${formatDate(inv.requested_at)}, paid ${formatDate(inv.verified_at)}`
+                          : inv.status === "proof_submitted"
+                            ? `Confirmation uploaded ${formatDate(inv.proof_submitted_at)}. Review it`
+                            : `Sent ${formatDate(inv.requested_at)}${inv.rejection_reason ? ", waiting for a new confirmation" : ""}`}
                       </p>
                     </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3 pl-11 sm:pl-0">
-                    <span className="figures text-lg font-semibold">{money(Number(m.amount))}</span>
-                    <MilestoneBadge status={status} />
-                  </div>
-                </div>
-
-                <div className="mt-4 pl-11">
-                  {request ? (
-                    <Link href={`/payments/${request.id}`} className={request.status === "proof_submitted" ? buttonStyles.primary : buttonStyles.secondary}>
-                      {request.status === "proof_submitted" ? "Review receipt" : "View payment"}
-                    </Link>
-                  ) : (
-                    <div className="flex flex-col gap-3">
-                      <details className="group">
-                        <summary className={cn(index === nextToRequest ? buttonStyles.primary : buttonStyles.secondary, "cursor-pointer list-none")}>Request payment</summary>
-                        <ActionForm action={requestPayment} className="mt-4 max-w-xl rounded-lg border border-rule bg-desk/40 p-5">
-                          <input type="hidden" name="milestone_id" value={m.id} />
-                          <p className="text-sm text-graphite">
-                            {displayName(project.client)} will get an email asking for <span className="figures font-semibold text-ink">{money(Number(m.amount))}</span>.
-                          </p>
-                          <Field label="Wise payment link" name={`wise_${m.id}`} hint="The link from your Wise payment request or invoice.">
-                            <Input id={`wise_${m.id}`} name="wise_link" type="url" placeholder="https://wise.com/pay/…" />
-                          </Field>
-                          <Field label="Invoice" name={`invoice_${m.id}`} hint="Optional. PDF or image, up to 4 MB.">
-                            <Input id={`invoice_${m.id}`} name="invoice" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" />
-                          </Field>
-                          <Field label="Message to client" name={`msg_${m.id}`} hint="Optional">
-                            <Textarea id={`msg_${m.id}`} name="message" rows={2} placeholder="Phase 1 is live on staging. Invoice attached." />
-                          </Field>
-                          <SubmitButton pendingLabel="Sending…">Send payment request</SubmitButton>
-                        </ActionForm>
-                      </details>
-                      <details>
-                        <summary className="cursor-pointer list-none text-sm text-graphite hover:text-ink">Edit or delete</summary>
-                        <ActionForm action={updateMilestone} className="mt-4 max-w-xl rounded-lg border border-rule p-5">
-                          <input type="hidden" name="milestone_id" value={m.id} />
-                          <MilestoneFields milestone={m} currency={project.currency} />
-                          <div className="flex flex-wrap gap-2">
-                            <SubmitButton variant="secondary">Save milestone</SubmitButton>
-                          </div>
-                        </ActionForm>
-                        <ActionForm action={deleteMilestone} className="mt-2">
-                          <input type="hidden" name="milestone_id" value={m.id} />
-                          <SubmitButton variant="ghost" className="!text-danger" confirm={`Delete milestone "${m.title}"?`}>
-                            Delete milestone
-                          </SubmitButton>
-                        </ActionForm>
-                      </details>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="figures font-semibold">{money(Number(inv.amount))}</span>
+                      <MilestoneBadge status={inv.status} />
                     </div>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {project.description && <p className="mt-6 max-w-prose whitespace-pre-line text-sm leading-relaxed text-graphite">{project.description}</p>}
+        </section>
 
-      {project.milestones.length === 0 ? (
-        <Card title="Add the first milestone" className="mt-6 max-w-2xl">
-          <AddMilestoneForm projectId={project.id} currency={project.currency} suggestedAmount={unallocated > 0 ? unallocated : undefined} />
-        </Card>
-      ) : (
-        <details className="mt-4" open={unallocated > 0 || undefined}>
-          <summary className={cn(buttonStyles.secondary, "cursor-pointer list-none")}>Add a milestone</summary>
-          <Card className="mt-3 max-w-2xl">
-            {unallocated > 0 && (
-              <p className="mb-4 text-sm text-graphite">
-                <span className="figures font-semibold text-ink">{money(unallocated)}</span> of the price isn&apos;t in a milestone yet.
-              </p>
-            )}
-            <AddMilestoneForm projectId={project.id} currency={project.currency} suggestedAmount={unallocated > 0 ? unallocated : undefined} />
+        <aside className="lg:self-start">
+          <Card title="New invoice" tone={invoices.length === 0 ? "due" : undefined}>
+            <ActionForm action={createInvoice} resetOnSuccess>
+              <input type="hidden" name="project_id" value={project.id} />
+              <Field label="Title" name="inv_title" hint="What this invoice is for.">
+                <Input id="inv_title" name="title" placeholder="Phase 1: authentication and dashboard" required />
+              </Field>
+              <Field label={`Amount (${project.currency})`} name="inv_amount">
+                <Input
+                  id="inv_amount"
+                  name="amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="400"
+                  required
+                />
+              </Field>
+              <Field label="Wise payment link" name="inv_wise" hint="From your Wise invoice or payment request.">
+                <Input id="inv_wise" name="wise_link" type="url" placeholder="https://wise.com/pay/…" />
+              </Field>
+              <Field label="Invoice PDF" name="inv_file" hint="Optional. Attached to the email.">
+                <Input id="inv_file" name="invoice" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" />
+              </Field>
+              <Field label="Note to client" name="inv_note" hint="Optional">
+                <Textarea id="inv_note" name="message" rows={2} placeholder="Phase 1 is live on staging. Thanks!" />
+              </Field>
+              <SubmitButton className="w-full" pendingLabel="Sending invoice…">
+                Send invoice to {project.client.full_name.split(" ")[0] || "client"}
+              </SubmitButton>
+            </ActionForm>
           </Card>
-        </details>
-      )}
-    </>
-  );
-}
-
-function AddMilestoneForm({ projectId, currency, suggestedAmount }: { projectId: string; currency: string; suggestedAmount?: number }) {
-  return (
-    <ActionForm action={addMilestone} resetOnSuccess>
-      <input type="hidden" name="project_id" value={projectId} />
-      <MilestoneFields currency={currency} suggestedAmount={suggestedAmount} />
-      <SubmitButton pendingLabel="Adding…">Add milestone</SubmitButton>
-    </ActionForm>
-  );
-}
-
-function MilestoneFields({ milestone, currency, suggestedAmount }: { milestone?: Milestone; currency: string; suggestedAmount?: number }) {
-  const key = milestone?.id ?? "new";
-  return (
-    <>
-      <Field label="Title" name={`title_${key}`}>
-        <Input id={`title_${key}`} name="title" defaultValue={milestone?.title} placeholder="Phase 1: authentication and dashboard" required />
-      </Field>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label={`Amount (${currency})`} name={`amount_${key}`}>
-          <Input id={`amount_${key}`} name="amount" type="number" min="0.01" step="0.01" defaultValue={milestone?.amount ?? suggestedAmount} placeholder="400" required />
-        </Field>
-        <Field label="Target date" name={`due_${key}`} hint="Optional">
-          <Input id={`due_${key}`} name="due_date" type="date" defaultValue={milestone?.due_date ?? ""} />
-        </Field>
+          {s.notInvoiced === 0 && s.total > 0 && (
+            <p className="mt-3 text-sm text-graphite">The full project price has been invoiced.</p>
+          )}
+        </aside>
       </div>
-      <Field label="Description" name={`desc_${key}`} hint="Optional. Clients can see this.">
-        <Textarea id={`desc_${key}`} name="description" rows={2} defaultValue={milestone?.description ?? ""} />
-      </Field>
     </>
   );
 }

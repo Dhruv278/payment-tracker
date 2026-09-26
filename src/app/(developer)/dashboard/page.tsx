@@ -48,7 +48,7 @@ export default async function DashboardPage() {
                   <div className="min-w-0">
                     <p className="truncate font-medium group-hover:underline">Verify payment: {p.milestone.title}</p>
                     <p className="truncate text-sm text-graphite">
-                      {displayName(p.client)} sent a receipt for {p.project.name} on {formatDate(p.proof_submitted_at)}
+                      {displayName(p.client)} uploaded a payment confirmation for {p.project.name} on {formatDate(p.proof_submitted_at)}
                     </p>
                   </div>
                   <span className="figures shrink-0 font-semibold">{formatMoney(p.amount, p.currency)}</span>
@@ -76,7 +76,7 @@ export default async function DashboardPage() {
       <FigureRow className="mb-8">
         <Figure label="Contracted" value={<MoneyLines totals={contracted} />} hint={`${live.length} project${live.length === 1 ? "" : "s"}, excluding cancelled`} />
         <Figure label="Collected from clients" value={<MoneyLines totals={collected} />} tone="paid" />
-        <Figure label="Still to collect" value={<MoneyLines totals={outstanding} />} hint={awaiting.length ? `${awaiting.length} request${awaiting.length > 1 ? "s" : ""} awaiting payment` : undefined} />
+        <Figure label="Still to collect" value={<MoneyLines totals={outstanding} />} hint={awaiting.length ? `${awaiting.length} invoice${awaiting.length > 1 ? "s" : ""} awaiting payment` : undefined} />
         <Figure label="Net earned this month" value={<MoneyLines totals={netMonth} />} hint={`${now.slice(0, 4)} so far: ${formatTotals(netYear)}`} />
       </FigureRow>
 
@@ -85,7 +85,7 @@ export default async function DashboardPage() {
         <Link href="/projects" className="text-sm text-graphite hover:text-ink">All projects</Link>
       </div>
       {active.length === 0 ? (
-        <EmptyState title="No active projects" description="Create a project for a client, set its price and split it into milestones." action={<ButtonLink href="/projects/new">New project</ButtonLink>} />
+        <EmptyState title="No active projects" description="Create a project for a client and set its price. Then send invoices as the work gets done." action={<ButtonLink href="/projects/new">New project</ButtonLink>} />
       ) : (
         <div className="overflow-hidden rounded-xl border border-rule bg-paper">
           {active.map(({ p, s }) => (

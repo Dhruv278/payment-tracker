@@ -26,7 +26,7 @@ export default async function PortalPage() {
               <p className="figures mt-1 text-4xl font-semibold tracking-[-0.02em]">{formatTotals(dueTotal)}</p>
             </div>
             <p className="text-sm text-graphite">
-              {due.length} payment request{due.length > 1 ? "s" : ""}
+              {due.length} unpaid invoice{due.length > 1 ? "s" : ""}
             </p>
           </div>
           <ul className="mt-6 divide-y divide-rule-soft border-t border-rule-soft">
@@ -35,14 +35,14 @@ export default async function PortalPage() {
                 <div className="min-w-0">
                   <p className="font-medium">{p.milestone.title}</p>
                   <p className="text-sm text-graphite">
-                    {p.project.name}, requested {formatDate(p.requested_at)}
+                    {p.project.name}, sent {formatDate(p.requested_at)}
                   </p>
-                  {p.rejection_reason && <p className="mt-1 text-sm text-[#8a5a12]">Your last receipt needs another look.</p>}
+                  {p.rejection_reason && <p className="mt-1 text-sm text-[#8a5a12]">Please upload a new payment confirmation.</p>}
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="figures text-lg font-semibold">{formatMoney(p.amount, p.currency)}</span>
                   <Link href={`/portal/payments/${p.id}`} className={buttonStyles.primary}>
-                    {p.rejection_reason ? "Update receipt" : "Pay now"}
+                    {p.rejection_reason ? "Upload new confirmation" : "Pay now"}
                   </Link>
                 </div>
               </li>
@@ -55,14 +55,14 @@ export default async function PortalPage() {
           <p className="mt-1 text-[0.9375rem] text-graphite">
             {inReview.length
               ? `${inReview.length} payment${inReview.length > 1 ? "s are" : " is"} being verified. You'll get an email once confirmed.`
-              : "We'll email you when the next milestone is ready for payment."}
+              : "We'll email you when the next invoice is ready."}
           </p>
         </Card>
       )}
 
       <h2 className="mb-3 text-lg font-semibold">Projects</h2>
       {projects.length === 0 ? (
-        <EmptyState title="No projects yet" description="When a project is set up for you, it will appear here with its milestones and payments." />
+        <EmptyState title="No projects yet" description="When a project is set up for you, it will appear here with its invoices and payments." />
       ) : (
         <div className="space-y-3">
           {projects.map((p) => {
@@ -92,7 +92,7 @@ export default async function PortalPage() {
       )}
 
       {payments.length > 0 && (
-        <Card title="Payment history" className="mt-8">
+        <Card title="Invoices" className="mt-8">
           <ul className="-my-3 divide-y divide-rule-soft">
             {payments.map((p) => (
               <li key={p.id}>
@@ -100,7 +100,7 @@ export default async function PortalPage() {
                   <div className="min-w-0">
                     <p className="font-medium group-hover:underline">{p.milestone.title}</p>
                     <p className="text-sm text-graphite">
-                      {p.project.name}, requested {formatDate(p.requested_at)}
+                      {p.project.name}, sent {formatDate(p.requested_at)}
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">

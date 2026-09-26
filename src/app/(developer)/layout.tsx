@@ -18,7 +18,7 @@ export default async function DeveloperLayout({ children }: { children: React.Re
         { href: "/dashboard", label: "Dashboard" },
         { href: "/clients", label: "Clients", badge: pendingClients ?? 0 },
         { href: "/projects", label: "Projects" },
-        { href: "/payments", label: "Payments", badge: proofsToVerify ?? 0 },
+        { href: "/payments", label: "Invoices", badge: proofsToVerify ?? 0 },
         { href: "/reports", label: "Reports" },
       ]}
     >
