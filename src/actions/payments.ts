@@ -100,6 +100,7 @@ export async function requestPayment(_: ActionState, formData: FormData): Promis
   const amount = formatMoney(milestone.amount, milestone.project.currency);
   sendEmail({
     to: milestone.project.client.email,
+    replyTo: dev.email,
     subject: `Payment request: ${amount} for ${milestone.project.name}`,
     heading: `Payment requested — ${amount}`,
     lines: [
@@ -236,6 +237,7 @@ export async function verifyPayment(_: ActionState, formData: FormData): Promise
   const amount = formatMoney(request.amount, request.currency);
   sendEmail({
     to: request.client.email,
+    replyTo: dev.email,
     subject: `Payment received: ${amount} — ${request.project.name}`,
     heading: "Payment confirmed — thank you!",
     lines: [`Your payment of ${amount} for "${request.milestone.title}" (${request.project.name}) has been verified.`],
@@ -265,6 +267,7 @@ export async function rejectProof(_: ActionState, formData: FormData): Promise<A
 
   sendEmail({
     to: request.client.email,
+    replyTo: dev.email,
     subject: `Action needed: payment proof for ${request.project.name}`,
     heading: "Your payment proof needs another look",
     lines: [`Milestone: ${request.milestone.title} (${formatMoney(request.amount, request.currency)})`, `Reason: ${reason}`, "Please upload an updated receipt."],

@@ -18,13 +18,13 @@ export default async function EditProjectPage({ params }: PageProps<"/projects/[
 
   return (
     <>
-      <PageHeader title={`Edit ${project.name}`} />
+      <PageHeader back={{ href: `/projects/${project.id}`, label: project.name }} title="Edit project" />
       <Card className="max-w-2xl">
         <ProjectForm action={updateProject} clients={clients} project={project} />
       </Card>
-      <Card title="Danger zone" className="mt-6 max-w-2xl border-rose-200">
-        <p className="mb-4 text-sm text-slate-600">
-          Deleting removes the project, its milestones and any unverified payment requests. Projects with verified payments can&apos;t be deleted — mark them as completed or cancelled instead.
+      <Card title="Delete project" className="mt-6 max-w-2xl">
+        <p className="mb-4 text-sm text-graphite">
+          Deleting removes the project, its milestones and any unverified payment requests. Projects with verified payments can&apos;t be deleted. Mark them as completed or cancelled instead.
         </p>
         <ActionForm action={deleteProject}>
           <input type="hidden" name="project_id" value={project.id} />

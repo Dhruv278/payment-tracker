@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ButtonLink, Card, EmptyState, Field, Input, PageHeader, Select, StatCard, Table, Td, buttonStyles } from "@/components/ui";
+import { ButtonLink, Card, EmptyState, Field, Figure, FigureRow, Input, PageHeader, Select, Table, Td, buttonStyles, cn, MoneyLines } from "@/components/ui";
 import { buildReport, datePresets, parseReportFilters } from "@/lib/reports";
 import { listClients, listProjects } from "@/lib/queries";
 import { displayName, formatDate, formatMoney, formatTotals } from "@/lib/format";
@@ -27,12 +27,12 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
     <>
       <PageHeader
         title="Reports"
-        description="Verified payments by the date you received the money."
+        description="Verified payments, filtered by the date the money reached you."
         actions={<ButtonLink variant="secondary" href={`/reports/export${query ? `?${query}` : ""}`} prefetch={false}>Export CSV</ButtonLink>}
       />
 
       <Card className="mb-6">
-        <form className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
+        <form aria-label="Report filters" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
           <Field label="Client" name="client">
             <Select id="client" name="client" defaultValue={filters.clientId ?? ""}>
               <option value="">All clients</option>
@@ -62,18 +62,26 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         </form>
         <div className="mt-4 flex flex-wrap gap-2">
           {datePresets().map((p) => (
-            <Link key={p.label} href={presetHref(p.from, p.to)} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-400 hover:text-slate-900">
+            <Link
+              key={p.label}
+              href={presetHref(p.from, p.to)}
+              aria-current={filters.from === p.from && filters.to === p.to ? "true" : undefined}
+              className={cn(
+                "rounded-full border px-3 py-1 text-sm transition-colors",
+                filters.from === p.from && filters.to === p.to ? "border-ink bg-ink text-white" : "border-rule text-graphite hover:border-graphite hover:text-ink",
+              )}
+            >
               {p.label}
             </Link>
           ))}
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Payments" value={report.rows.length} />
-        <StatCard label="Billed & collected" value={formatTotals(report.billed)} hint="What clients paid" />
-        <StatCard label="Net earned (private)" value={<span className="text-emerald-700">{formatTotals(report.net)}</span>} hint="What you actually received" />
-      </div>
+      <FigureRow className="lg:grid-cols-3">
+        <Figure label="Verified payments" value={report.rows.length} />
+        <Figure label="Clients paid" value={<MoneyLines totals={report.billed} />} />
+        <Figure label="You received" value={<MoneyLines totals={report.net} />} tone="paid" hint="After fees and expenses, private to you" />
+      </FigureRow>
 
       {report.rows.length === 0 ? (
         <div className="mt-6">
@@ -83,42 +91,44 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         <>
           <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Card title="By client">
-              <Table head={["Client", "#", "Billed", "Net"]}>
+              <Table head={["Client", "Payments", "Clients paid", "You received"]} align={["left", "right", "right", "right"]}>
                 {report.byClient.map((g) => (
                   <tr key={g.key}>
                     <Td className="font-medium">{g.label}</Td>
-                    <Td>{g.count}</Td>
-                    <Td>{formatTotals(g.billed)}</Td>
-                    <Td className="text-emerald-700">{formatTotals(g.net)}</Td>
+                    <Td align="right">{g.count}</Td>
+                    <Td align="right">{formatTotals(g.billed)}</Td>
+                    <Td align="right" className="font-semibold text-paid">{formatTotals(g.net)}</Td>
                   </tr>
                 ))}
               </Table>
             </Card>
             <Card title="By project">
-              <Table head={["Project", "#", "Billed", "Net"]}>
+              <Table head={["Project", "Payments", "Clients paid", "You received"]} align={["left", "right", "right", "right"]}>
                 {report.byProject.map((g) => (
                   <tr key={g.key}>
                     <Td className="font-medium">{g.label}</Td>
-                    <Td>{g.count}</Td>
-                    <Td>{formatTotals(g.billed)}</Td>
-                    <Td className="text-emerald-700">{formatTotals(g.net)}</Td>
+                    <Td align="right">{g.count}</Td>
+                    <Td align="right">{formatTotals(g.billed)}</Td>
+                    <Td align="right" className="font-semibold text-paid">{formatTotals(g.net)}</Td>
                   </tr>
                 ))}
               </Table>
             </Card>
           </div>
 
-          <Card title="Payments" className="mt-6">
-            <Table head={["Received", "Client", "Project", "Milestone", "Billed", "Net", "Note"]}>
+          <Card title="All payments" className="mt-6">
+            <Table head={["Received", "Milestone", "Client", "Client paid", "You received", "Note"]} align={["left", "left", "left", "right", "right", "left"]}>
               {report.rows.map((r) => (
                 <tr key={r.id}>
-                  <Td>{formatDate(r.earning.received_on)}</Td>
+                  <Td className="text-graphite">{formatDate(r.earning.received_on)}</Td>
+                  <Td>
+                    <Link href={`/payments/${r.id}`} className="font-medium hover:underline">{r.milestone.title}</Link>
+                    <p className="text-xs text-graphite">{r.project.name}</p>
+                  </Td>
                   <Td>{displayName(r.client)}</Td>
-                  <Td>{r.project.name}</Td>
-                  <Td><Link href={`/payments/${r.id}`} className="hover:underline">{r.milestone.title}</Link></Td>
-                  <Td>{formatMoney(r.amount, r.currency)}</Td>
-                  <Td className="font-medium text-emerald-700">{formatMoney(r.earning.net_amount, r.earning.net_currency)}</Td>
-                  <Td className="max-w-56 truncate text-slate-500">{r.earning.note ?? ""}</Td>
+                  <Td align="right">{formatMoney(r.amount, r.currency)}</Td>
+                  <Td align="right" className="font-semibold text-paid">{formatMoney(r.earning.net_amount, r.earning.net_currency)}</Td>
+                  <Td className="max-w-56 truncate text-graphite">{r.earning.note ?? ""}</Td>
                 </tr>
               ))}
             </Table>

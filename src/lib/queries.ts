@@ -1,13 +1,14 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import type { Milestone, PaymentEarning, PaymentRequest, Profile, Project } from "@/lib/types";
+import type { TrackMilestone } from "@/components/payment-track";
+import { milestoneStatus, type Milestone, type PaymentEarning, type PaymentRequest, type Profile, type Project } from "@/lib/types";
 
 // All queries run with the signed-in user's session, so RLS scopes the rows.
 
 export type ProjectWithRelations = Project & {
   client: Pick<Profile, "id" | "full_name" | "email" | "company">;
-  milestones: Pick<Milestone, "id" | "amount">[];
-  payment_requests: Pick<PaymentRequest, "id" | "status" | "amount">[];
+  milestones: Pick<Milestone, "id" | "title" | "amount" | "position">[];
+  payment_requests: Pick<PaymentRequest, "id" | "status" | "amount" | "milestone_id">[];
 };
 
 export type ProjectSummary = {
@@ -33,8 +34,23 @@ export function summarizeProject(p: Pick<ProjectWithRelations, "total_amount" | 
   };
 }
 
+/** Milestones in order with their derived payment status, for the payment track. */
+export function trackMilestones(p: {
+  milestones: Pick<Milestone, "id" | "title" | "amount" | "position">[];
+  payment_requests: Pick<PaymentRequest, "status" | "milestone_id">[];
+}): TrackMilestone[] {
+  return [...p.milestones]
+    .sort((a, b) => a.position - b.position)
+    .map((m) => ({
+      id: m.id,
+      title: m.title,
+      amount: Number(m.amount),
+      status: milestoneStatus(p.payment_requests.find((r) => r.milestone_id === m.id)),
+    }));
+}
+
 const PROJECT_WITH_RELATIONS =
-  "*, client:profiles!projects_client_id_fkey(id, full_name, email, company), milestones(id, amount), payment_requests(id, status, amount)";
+  "*, client:profiles!projects_client_id_fkey(id, full_name, email, company), milestones(id, title, amount, position), payment_requests(id, status, amount, milestone_id)";
 
 export async function listProjects(filter: { clientId?: string; status?: string } = {}) {
   const supabase = await createClient();

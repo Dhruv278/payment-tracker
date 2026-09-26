@@ -33,8 +33,9 @@ export function sumByCurrency<T>(rows: T[], amount: (r: T) => number, currency: 
     .map(([c, value]) => ({ currency: c, amount: Math.round(value * 100) / 100 }));
 }
 
-export function formatTotals(totals: CurrencyTotal[]): string {
-  if (totals.length === 0) return "—";
+/** Joins per-currency totals ("$1,200 + ₹36,000"). Shows zero in the fallback currency when empty. */
+export function formatTotals(totals: CurrencyTotal[], emptyCurrency = "USD"): string {
+  if (totals.length === 0) return formatMoney(0, emptyCurrency);
   return totals.map((t) => formatMoney(t.amount, t.currency)).join(" + ");
 }
 

@@ -1,11 +1,49 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-plex-sans);
+
+  --color-desk: #eef1f5;
+  --color-paper: #ffffff;
+  --color-ink: #14213d;
+  --color-ink-soft: #2b3a5c;
+  --color-graphite: #5b6475;
+  --color-mist: #646e80;
+  --color-rule: #d9dee7;
+  --color-rule-soft: #e8ebf1;
+
+  --color-paid: #1f7a4d;
+  --color-paid-tint: #e6f3ec;
+  --color-due: #b7791f;
+  --color-due-tint: #fbf1de;
+  --color-review: #6b4fbb;
+  --color-review-tint: #efeafb;
+  --color-danger: #b42318;
+  --color-danger-tint: #fdecea;
 }
 
 body {
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--color-desk);
+  color: var(--color-ink);
+  font-feature-settings: "tnum" 0;
+}
+
+/* Money and dates line up in columns. */
+.figures {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .track-segment {
+    transition: flex-grow 400ms ease;
+  }
 }

@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/app-shell";
+import { DeveloperShell } from "@/components/app-shell";
 import { requireDeveloper } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -12,7 +12,7 @@ export default async function DeveloperLayout({ children }: { children: React.Re
   ]);
 
   return (
-    <AppShell
+    <DeveloperShell
       profile={profile}
       nav={[
         { href: "/dashboard", label: "Dashboard" },
@@ -23,6 +23,6 @@ export default async function DeveloperLayout({ children }: { children: React.Re
       ]}
     >
       {children}
-    </AppShell>
+    </DeveloperShell>
   );
 }

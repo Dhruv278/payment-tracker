@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { ButtonLink, Card, EmptyState, PageHeader, ProjectBadge, ProgressBar, Table, Td, cn } from "@/components/ui";
-import { listProjects, summarizeProject } from "@/lib/queries";
+import { PaymentTrack } from "@/components/payment-track";
+import { FilterTabs } from "@/components/filter-tabs";
+import { ButtonLink, EmptyState, PageHeader, ProjectBadge } from "@/components/ui";
+import { listProjects, summarizeProject, trackMilestones } from "@/lib/queries";
 import { displayName, formatMoney } from "@/lib/format";
 
 export const metadata = { title: "Projects" };
@@ -15,46 +17,50 @@ const FILTERS = [
 
 export default async function ProjectsPage({ searchParams }: PageProps<"/projects">) {
   const { status } = await searchParams;
-  const current = typeof status === "string" ? status : "";
+  const current = typeof status === "string" && FILTERS.some((f) => f.value === status) ? status : "";
   const projects = await listProjects({ status: current || undefined });
 
   return (
     <>
       <PageHeader title="Projects" actions={<ButtonLink href="/projects/new">New project</ButtonLink>} />
-
-      <div className="mb-4 flex flex-wrap gap-1">
-        {FILTERS.map((f) => (
-          <Link
-            key={f.value}
-            href={f.value ? `/projects?status=${f.value}` : "/projects"}
-            className={cn("rounded-lg px-3 py-1.5 text-sm font-medium", current === f.value ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100")}
-          >
-            {f.label}
-          </Link>
-        ))}
-      </div>
+      <FilterTabs filters={FILTERS} current={current} href={(v) => (v ? `/projects?status=${v}` : "/projects")} />
 
       {projects.length === 0 ? (
-        <EmptyState title="No projects here" description="Create a project, set its price and add milestones." action={<ButtonLink href="/projects/new">New project</ButtonLink>} />
+        <EmptyState
+          title={current ? "No projects with this status" : "No projects yet"}
+          description="A project has a client, a price and milestones you request payment for."
+          action={<ButtonLink href="/projects/new">New project</ButtonLink>}
+        />
       ) : (
-        <Card>
-          <Table head={["Project", "Client", "Status", "Price", "Collected", "Awaiting", "Progress"]}>
-            {projects.map((p) => {
-              const s = summarizeProject(p);
-              return (
-                <tr key={p.id}>
-                  <Td><Link href={`/projects/${p.id}`} className="font-medium text-slate-900 hover:underline">{p.name}</Link></Td>
-                  <Td>{displayName(p.client)}</Td>
-                  <Td><ProjectBadge status={p.status} /></Td>
-                  <Td>{formatMoney(s.total, p.currency)}</Td>
-                  <Td className="text-emerald-700">{formatMoney(s.paid, p.currency)}</Td>
-                  <Td>{s.awaiting ? formatMoney(s.awaiting, p.currency) : "—"}</Td>
-                  <Td className="min-w-40"><ProgressBar value={s.paid} max={s.total} /></Td>
-                </tr>
-              );
-            })}
-          </Table>
-        </Card>
+        <div className="overflow-hidden rounded-xl border border-rule bg-paper">
+          {projects.map((p) => {
+            const s = summarizeProject(p);
+            return (
+              <Link key={p.id} href={`/projects/${p.id}`} className="grid grid-cols-1 gap-3 border-b border-rule-soft px-6 py-4 transition-colors last:border-b-0 hover:bg-desk/40 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:items-center md:gap-8">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2.5">
+                    <p className="truncate font-semibold">{p.name}</p>
+                    <ProjectBadge status={p.status} />
+                  </div>
+                  <p className="mt-0.5 truncate text-sm text-graphite">
+                    {displayName(p.client)}
+                    {p.client.company ? `, ${p.client.company}` : ""}
+                  </p>
+                </div>
+                <div>
+                  <div className="figures mb-2 flex justify-between gap-4 text-sm">
+                    <span className="text-graphite">
+                      <span className="font-semibold text-paid">{formatMoney(s.paid, p.currency)}</span> collected
+                      {s.awaiting > 0 && <span>, {formatMoney(s.awaiting, p.currency)} requested</span>}
+                    </span>
+                    <span className="font-semibold">{formatMoney(s.total, p.currency)}</span>
+                  </div>
+                  <PaymentTrack milestones={trackMilestones(p)} total={s.total} currency={p.currency} size="sm" />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       )}
     </>
   );
