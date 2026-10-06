@@ -4,6 +4,8 @@ Track freelance projects, milestones and client payments. Clients get a portal
 to see what they owe, pay via your Wise link and upload proof; you verify and
 record what you actually received (private to you).
 
+**Product guide** (screens, logins, deployment, database, troubleshooting): download [`docs/product-guide.html`](docs/product-guide.html) and open it in a browser.
+
 Design: [`docs/superpowers/specs/2026-09-26-freelance-payment-tracker-design.md`](docs/superpowers/specs/2026-09-26-freelance-payment-tracker-design.md)
 
 **Stack:** Next.js 16 · Supabase (Postgres, Auth, Storage) · Tailwind · Nodemailer (Gmail) · Vercel
@@ -64,8 +66,9 @@ Then `npm run dev` and open http://localhost:3000.
    Or link the CLI and run `npx supabase db push`.
 2. **Authentication → URL Configuration**: Site URL = your Vercel URL; Redirect URLs = `https://your-app.vercel.app/**`.
 3. **Authentication → Emails → SMTP Settings**: enable custom SMTP so confirm/reset emails come from your Gmail — host `smtp.gmail.com`, port `465`, your Gmail + app password.
+   **Templates**: paste [`supabase/templates/confirmation.html`](supabase/templates/confirmation.html) (Confirm signup) and [`recovery.html`](supabase/templates/recovery.html) (Reset password), so the links work on any device.
 4. Gmail app password: Google Account → Security → 2-Step Verification → **App passwords**.
-5. Import the repo in Vercel and set the env vars from `.env.example` (use `GMAIL_USER` / `GMAIL_APP_PASSWORD` instead of `SMTP_HOST`, and your real `NEXT_PUBLIC_SITE_URL`).
+5. Import the repo in Vercel and set the env vars from `.env.example` (use `GMAIL_USER` / `GMAIL_APP_PASSWORD` instead of `SMTP_HOST`, and your real `NEXT_PUBLIC_SITE_URL`). `vercel.json` pins the functions to Mumbai (`bom1`); change it if your database is elsewhere.
 
 ## Notes
 
