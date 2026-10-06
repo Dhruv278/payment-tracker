@@ -153,7 +153,7 @@ export default async function PaymentPage({ params }: PageProps<"/payments/[id]"
       </div>
 
       <Card title="History" className="mt-6">
-        <ActivityFeed items={history} audience="developer" clientName={displayName(payment.client)} />
+        <ActivityFeed items={history} audience="developer" clientName={displayName(payment.client)} links={false} />
       </Card>
     </>
   );

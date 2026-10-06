@@ -74,12 +74,15 @@ export function ActivityFeed({
   audience,
   clientName = "The client",
   showProject = false,
+  links = true,
   empty = "Nothing has happened yet.",
 }: {
   items: ActivityItem[];
   audience: Audience;
   clientName?: string;
   showProject?: boolean;
+  /** Off on an invoice's own page, where every event would link back to it. */
+  links?: boolean;
   empty?: string;
 }) {
   if (items.length === 0) return <p className="text-sm text-graphite">{empty}</p>;
@@ -87,7 +90,7 @@ export function ActivityFeed({
     <ol className="space-y-0">
       {items.map((a) => {
         const { text, tone } = describe(a, audience, clientName);
-        const link = href(a, audience);
+        const link = links ? href(a, audience) : null;
         return (
           <li
             key={a.id}

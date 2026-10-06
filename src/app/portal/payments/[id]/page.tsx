@@ -142,7 +142,7 @@ export default async function ClientPaymentPage({ params }: PageProps<"/portal/p
           </Card>
           {history.length > 0 && (
             <Card title="History" className="mt-4">
-              <ActivityFeed items={history} audience="client" />
+              <ActivityFeed items={history} audience="client" links={false} />
             </Card>
           )}
         </aside>
