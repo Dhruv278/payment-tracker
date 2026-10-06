@@ -52,6 +52,25 @@ export default async function PaymentPage({ params }: PageProps<"/payments/[id]"
         }
       />
 
+      {payment.status === "requested" && (
+        <Card tone="paid" title="Client already paid you?" className="mb-6">
+          <p className="mb-5 max-w-2xl text-sm text-graphite">
+            If the money is already in your account, you don&apos;t need to wait for {displayName(payment.client)} to upload a confirmation. Record what
+            actually reached you (any currency, after fees; only you can see it) and mark the invoice as paid. {displayName(payment.client)} gets a
+            payment confirmation email.
+          </p>
+          <div className="max-w-2xl">
+            <EarningForm
+              action={verifyPayment}
+              requestId={payment.id}
+              submitLabel="Mark as paid"
+              variant="paid"
+              confirm={`Mark ${amount} as paid? ${displayName(payment.client)} will get a payment confirmation email.`}
+            />
+          </div>
+        </Card>
+      )}
+
       {payment.status === "proof_submitted" && (
         <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <Card tone="paid" title="Confirm you received it">
@@ -147,7 +166,11 @@ export default async function PaymentPage({ params }: PageProps<"/payments/[id]"
               {payment.client_note && <p className="mt-5 whitespace-pre-line border-l-2 border-rule pl-4 text-sm leading-relaxed text-graphite">{payment.client_note}</p>}
             </>
           ) : (
-            <p className="text-sm text-graphite">Not uploaded yet. You&apos;ll get an email when {displayName(payment.client)} uploads the Wise payment confirmation.</p>
+            <p className="text-sm text-graphite">
+              {payment.status === "verified"
+                ? "None uploaded. You marked this invoice as paid yourself."
+                : `Not uploaded yet. You'll get an email when ${displayName(payment.client)} uploads the Wise payment confirmation.`}
+            </p>
           )}
         </Card>
       </div>
@@ -165,12 +188,14 @@ function EarningForm({
   earning,
   submitLabel,
   variant = "primary",
+  confirm,
 }: {
   action: typeof verifyPayment;
   requestId: string;
   earning?: PaymentEarning;
   submitLabel: string;
   variant?: "primary" | "paid";
+  confirm?: string;
 }) {
   return (
     <ActionForm action={action}>
@@ -195,7 +220,9 @@ function EarningForm({
           <Input id={`note_${requestId}`} name="note" defaultValue={earning?.note ?? ""} placeholder="After Wise fees" />
         </Field>
       </div>
-      <SubmitButton variant={variant} pendingLabel="Saving…">{submitLabel}</SubmitButton>
+      <SubmitButton variant={variant} pendingLabel="Saving…" confirm={confirm}>
+        {submitLabel}
+      </SubmitButton>
     </ActionForm>
   );
 }

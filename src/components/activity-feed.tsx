@@ -48,7 +48,15 @@ function describe(a: ActivityItem, audience: Audience, clientName: string): { te
         tone: "danger",
       };
     case "payment_verified":
-      return { text: <>Payment confirmed: {invoice}, {money}</>, tone: "paid" };
+      return {
+        text: (
+          <>
+            Payment confirmed: {invoice}, {money}
+            {mine && a.detail === "no_proof" && <> (you marked it paid, no confirmation uploaded)</>}
+          </>
+        ),
+        tone: "paid",
+      };
     case "earning_recorded":
       return { text: <>You received <span className="font-medium text-ink">{money}</span> for {invoice}</>, tone: "paid" };
     case "earning_updated":

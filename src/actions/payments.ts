@@ -335,6 +335,8 @@ export async function verifyPayment(_: ActionState, formData: FormData): Promise
   const request = await loadRequest(parsed.data.request_id);
   if (!request || request.developer_id !== dev.id) return { error: "Invoice not found." };
   if (request.status === "verified") return { error: "Already verified." };
+  // The developer can also mark an invoice paid before the client uploads anything.
+  const withoutProof = request.status === "requested";
 
   const admin = createAdminClient();
   const { error: earningError } = await admin.from("payment_earnings").upsert({
@@ -350,7 +352,13 @@ export async function verifyPayment(_: ActionState, formData: FormData): Promise
   const now = new Date().toISOString();
   const { error } = await admin
     .from("payment_requests")
-    .update({ status: "verified", verified_at: now, rejection_reason: null, updated_at: now })
+    .update({
+      status: "verified",
+      verified_at: now,
+      rejection_reason: null,
+      updated_at: now,
+      ...(withoutProof && !request.client_paid_on ? { client_paid_on: parsed.data.received_on } : {}),
+    })
     .eq("id", request.id);
   if (error) return { error: error.message };
 
@@ -364,13 +372,13 @@ export async function verifyPayment(_: ActionState, formData: FormData): Promise
     cta: { label: "View project", path: `/portal/projects/${request.project_id}` },
   });
   const trail = { project_id: request.project_id, developer_id: dev.id, payment_request_id: request.id, title: request.milestone.title };
-  await logActivity({ ...trail, kind: "payment_verified", amount: request.amount, currency: request.currency });
+  await logActivity({ ...trail, kind: "payment_verified", amount: request.amount, currency: request.currency, detail: withoutProof ? "no_proof" : null });
   // What actually arrived stays private to the developer.
   await logActivity({ ...trail, kind: "earning_recorded", client_visible: false, amount: parsed.data.net_amount, currency: parsed.data.net_currency });
 
   revalidatePayment(request);
   revalidatePath("/reports");
-  return { success: "Payment verified. The invoice is marked as paid." };
+  return { success: withoutProof ? "Marked as paid." : "Payment verified. The invoice is marked as paid." };
 }
 
 export async function rejectProof(_: ActionState, formData: FormData): Promise<ActionState> {
