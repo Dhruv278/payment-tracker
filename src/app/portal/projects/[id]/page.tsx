@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PaymentTrack } from "@/components/payment-track";
+import { NoteList } from "@/components/project-notes";
 import { Card, Figure, FigureRow, MilestoneBadge, PageHeader, ProjectBadge, buttonStyles } from "@/components/ui";
-import { summarizeProject, trackMilestones } from "@/lib/queries";
+import { listProjectNotes, summarizeProject, trackMilestones } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { Milestone, PaymentRequest, Project } from "@/lib/types";
@@ -19,11 +20,10 @@ export async function generateMetadata({ params }: PageProps<"/portal/projects/[
 export default async function ClientProjectPage({ params }: PageProps<"/portal/projects/[id]">) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: project } = await supabase
-    .from("projects")
-    .select("*, milestones(id, title), payment_requests(*)")
-    .eq("id", id)
-    .maybeSingle<ClientProject>();
+  const [{ data: project }, notes] = await Promise.all([
+    supabase.from("projects").select("*, milestones(id, title), payment_requests(*)").eq("id", id).maybeSingle<ClientProject>(),
+    listProjectNotes(id),
+  ]);
   if (!project) notFound();
 
   const s = summarizeProject(project);
@@ -70,6 +70,13 @@ export default async function ClientProjectPage({ params }: PageProps<"/portal/p
             </li>
           ))}
         </ul>
+      )}
+
+      {notes.length > 0 && (
+        <section id="notes" className="mt-10 scroll-mt-6">
+          <h2 className="mb-3 text-lg font-semibold">Notes</h2>
+          <NoteList notes={notes} />
+        </section>
       )}
     </>
   );

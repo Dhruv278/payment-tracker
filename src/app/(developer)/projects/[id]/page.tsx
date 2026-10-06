@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { createInvoice } from "@/actions/payments";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { PaymentTrack } from "@/components/payment-track";
+import { NewNoteCard, NoteList } from "@/components/project-notes";
 import { ButtonLink, Card, Field, Figure, FigureRow, Input, MilestoneBadge, PageHeader, ProjectBadge, Textarea } from "@/components/ui";
-import { summarizeProject, trackMilestones } from "@/lib/queries";
+import { listProjectNotes, summarizeProject, trackMilestones } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
 import { displayName, formatDate, formatMoney } from "@/lib/format";
 import type { Milestone, PaymentRequest, Profile, Project } from "@/lib/types";
@@ -25,11 +26,14 @@ export async function generateMetadata({ params }: PageProps<"/projects/[id]">) 
 export default async function ProjectPage({ params }: PageProps<"/projects/[id]">) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: project } = await supabase
-    .from("projects")
-    .select("*, client:profiles!projects_client_id_fkey(id, full_name, email, company), milestones(id, title), payment_requests(*)")
-    .eq("id", id)
-    .maybeSingle<ProjectDetail>();
+  const [{ data: project }, notes] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("*, client:profiles!projects_client_id_fkey(id, full_name, email, company), milestones(id, title), payment_requests(*)")
+      .eq("id", id)
+      .maybeSingle<ProjectDetail>(),
+    listProjectNotes(id),
+  ]);
   if (!project) notFound();
 
   const s = summarizeProject(project);
@@ -99,6 +103,12 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
             </ul>
           )}
           {project.description && <p className="mt-6 max-w-prose whitespace-pre-line text-sm leading-relaxed text-graphite">{project.description}</p>}
+
+          <section id="notes" className="mt-10 scroll-mt-6">
+            <h2 className="mb-3 text-lg font-semibold">Notes</h2>
+            <NewNoteCard projectId={project.id} clientName={displayName(project.client)} />
+            {notes.length > 0 && <NoteList notes={notes} editable />}
+          </section>
         </section>
 
         <aside className="lg:self-start">

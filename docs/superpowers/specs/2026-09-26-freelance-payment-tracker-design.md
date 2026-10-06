@@ -112,3 +112,21 @@ was removed at the user's request. The app now works like a bill book:
 - Storage is unchanged: an invoice is a `milestones` row (title, amount) plus
   its `payment_requests` row. `milestones.due_date` is unused.
 - No automatic invoice numbers; the Wise invoice PDF carries its own number.
+
+## Revision 2026-10-06: project notes
+
+A running log on each project (meeting summaries, progress updates, decisions)
+that the developer writes and the client reads.
+
+- Table `project_notes` (migration `0002`): `project_id`, `developer_id`,
+  optional `title`, required `body` (plain text, up to 20,000 characters),
+  `created_at`, `updated_at`. Deleted with the project.
+- RLS select-only: the developer reads their own notes; an approved client
+  reads notes on their own projects. Create, edit and delete go through
+  developer-only server actions with the service-role key.
+- Developer project page: **Notes** section under Invoices with an Add a note
+  form (states that the client can read it), then notes newest first, each
+  with Edit (inline) and Delete (confirm).
+- Client project page: the same list, read-only; hidden when there are no
+  notes.
+- Rendered as plain text with line breaks kept. No email on new notes.

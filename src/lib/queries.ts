@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { TrackMilestone } from "@/components/payment-track";
-import type { Milestone, PaymentEarning, PaymentRequest, Profile, Project } from "@/lib/types";
+import type { Milestone, PaymentEarning, PaymentRequest, Profile, Project, ProjectNote } from "@/lib/types";
 
 // All queries run with the signed-in user's session, so RLS scopes the rows.
 
@@ -103,6 +103,18 @@ export async function listVerifiedPayments(filter: { from?: string; to?: string;
   if (filter.clientId) query = query.eq("client_id", filter.clientId);
   if (filter.projectId) query = query.eq("project_id", filter.projectId);
   const { data } = await query.returns<VerifiedPaymentRow[]>();
+  return data ?? [];
+}
+
+/** Notes on a project, newest first. RLS limits them to the project's developer and client. */
+export async function listProjectNotes(projectId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("project_notes")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .returns<ProjectNote[]>();
   return data ?? [];
 }
 

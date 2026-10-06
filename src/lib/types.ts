@@ -76,6 +76,17 @@ export type PaymentEarning = {
   created_at: string;
 };
 
+/** Written by the developer; visible to the developer and the project's client. */
+export type ProjectNote = {
+  id: string;
+  project_id: string;
+  developer_id: string;
+  title: string | null;
+  body: string;
+  created_at: string;
+  updated_at: string;
+};
+
 /** Shape returned by server actions used with useActionState. */
 export type ActionState = { error?: string; success?: string } | undefined;
 

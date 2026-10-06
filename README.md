@@ -17,7 +17,8 @@ It works like a bill book:
 3. When part of the work is done, **Send invoice** from the project page: title, amount (e.g. $400), your Wise payment link and optionally the invoice PDF. The client gets an email with a **Pay with Wise** button, the PDF attached and an **Upload payment confirmation** button.
 4. Client pays and uploads the Wise payment-completed PDF. You get an email.
 5. You **verify** it and record what actually reached you, in any currency (e.g. ₹36,000). Clients never see this. Or ask for a new confirmation.
-6. Each project shows price, invoiced, paid and not-invoiced-yet. **Reports** show billed vs. net earned by client, project and date range (incl. Indian FY presets), with CSV export.
+6. Add **Notes** to a project (meeting summaries, progress updates). The client sees them on their project page; only you can add, edit or delete them.
+7. Each project shows price, invoiced, paid and not-invoiced-yet. **Reports** show billed vs. net earned by client, project and date range (incl. Indian FY presets), with CSV export.
 
 ## Run locally (no cloud accounts needed)
 
@@ -55,11 +56,11 @@ Then `npm run dev` and open http://localhost:3000.
 1. Sign up with the email in `DEVELOPER_EMAILS` → confirm via the link in the mail inbox → you land on the dashboard.
 2. Sign up as a client in a private window (or invite one from **Clients**) and walk through the flow.
 
-`npm run db:reset` wipes the local database and re-applies the migration. `npm run db:stop` shuts Supabase down.
+`npm run db:reset` wipes the local database and re-applies the migrations; `npx supabase migration up` applies new ones and keeps your data. `npm run db:stop` shuts Supabase down.
 
 ## Deploy (Supabase cloud + Vercel)
 
-1. Create a project at [supabase.com](https://supabase.com). In **SQL Editor**, run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) (tables, security policies, private `documents` bucket).
+1. Create a project at [supabase.com](https://supabase.com). In **SQL Editor**, run every file in [`supabase/migrations/`](supabase/migrations) in order (tables, security policies, private `documents` bucket, project notes).
    Or link the CLI and run `npx supabase db push`.
 2. **Authentication → URL Configuration**: Site URL = your Vercel URL; Redirect URLs = `https://your-app.vercel.app/**`.
 3. **Authentication → Emails → SMTP Settings**: enable custom SMTP so confirm/reset emails come from your Gmail — host `smtp.gmail.com`, port `465`, your Gmail + app password.
