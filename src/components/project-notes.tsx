@@ -33,6 +33,13 @@ export function NewNoteCard({ projectId, clientName }: { projectId: string; clie
       <ActionForm action={createNote} resetOnSuccess>
         <input type="hidden" name="project_id" value={projectId} />
         <NoteFields idPrefix="new-note" />
+        <label className="flex items-start gap-2.5 text-sm text-ink">
+          <input type="checkbox" name="email_client" className="mt-0.5 size-4 shrink-0 accent-ink" />
+          <span>
+            Also email this note to {clientName}
+            <span className="block text-xs text-graphite">Otherwise it only appears on their project page.</span>
+          </span>
+        </label>
         <SubmitButton pendingLabel="Adding note…">Add note</SubmitButton>
       </ActionForm>
     </Card>

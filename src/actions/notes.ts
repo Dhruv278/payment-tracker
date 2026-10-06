@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { logActivity } from "@/lib/activity";
 import { authorizeDeveloper } from "@/lib/auth";
+import { sendEmail } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ActionState, Project, ProjectNote } from "@/lib/types";
+import type { ActionState, Profile, Project, ProjectNote } from "@/lib/types";
 
 const UNAUTHORIZED: ActionState = { error: "You are not allowed to do that." };
 
@@ -38,14 +40,36 @@ export async function createNote(_: ActionState, formData: FormData): Promise<Ac
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const admin = createAdminClient();
-  const { data: project } = await admin.from("projects").select("id, developer_id").eq("id", projectId).maybeSingle<Pick<Project, "id" | "developer_id">>();
+  const { data: project } = await admin
+    .from("projects")
+    .select("id, name, developer_id, client:profiles!projects_client_id_fkey(email, full_name)")
+    .eq("id", projectId)
+    .maybeSingle<Pick<Project, "id" | "name" | "developer_id"> & { client: Pick<Profile, "email" | "full_name"> }>();
   if (!project || project.developer_id !== dev.id) return { error: "Project not found." };
 
-  const { error } = await admin.from("project_notes").insert({ ...parsed.data, project_id: project.id, developer_id: dev.id });
+  const { data: note, error } = await admin
+    .from("project_notes")
+    .insert({ ...parsed.data, project_id: project.id, developer_id: dev.id })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
+  await logActivity({ project_id: project.id, developer_id: dev.id, note_id: note.id, kind: "note_added", title: parsed.data.title });
+
+  const emailed = formData.get("email_client") === "on";
+  if (emailed) {
+    sendEmail({
+      to: project.client.email,
+      replyTo: dev.email,
+      subject: `${parsed.data.title ?? "Project update"}: ${project.name}`,
+      heading: parsed.data.title ?? `Update on ${project.name}`,
+      lines: [...parsed.data.body.split(/\n+/).filter((line) => line.trim()), `Project: ${project.name}`],
+      cta: { label: "Open project", path: `/portal/projects/${project.id}#notes` },
+    });
+  }
 
   revalidateNotes(project.id);
-  return { success: "Note added. Your client can see it on their project page." };
+  const clientName = project.client.full_name || project.client.email;
+  return { success: emailed ? `Note added and emailed to ${clientName}.` : `Note added. ${clientName} can see it on their project page.` };
 }
 
 export async function updateNote(_: ActionState, formData: FormData): Promise<ActionState> {

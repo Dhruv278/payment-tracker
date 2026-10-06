@@ -183,7 +183,7 @@ export function MilestoneBadge({ status, audience = "developer" }: { status: Mil
   return <Badge tone={meta.tone}>{audience === "client" ? meta.clientLabel : meta.label}</Badge>;
 }
 
-const projectBadge: Record<ProjectStatus, [keyof typeof badgeTones, string]> = {
+export const projectBadge: Record<ProjectStatus, [keyof typeof badgeTones, string]> = {
   active: ["info", "Active"],
   on_hold: ["due", "On hold"],
   completed: ["paid", "Completed"],

@@ -87,6 +87,36 @@ export type ProjectNote = {
   updated_at: string;
 };
 
+export type ActivityKind =
+  | "project_created"
+  | "project_status"
+  | "project_price"
+  | "invoice_sent"
+  | "invoice_reminder"
+  | "invoice_cancelled"
+  | "proof_submitted"
+  | "proof_rejected"
+  | "payment_verified"
+  | "earning_recorded"
+  | "earning_updated"
+  | "note_added";
+
+/** One event in a project's history. `client_visible = false` rows are developer-only. */
+export type Activity = {
+  id: string;
+  project_id: string;
+  developer_id: string;
+  payment_request_id: string | null;
+  note_id: string | null;
+  kind: ActivityKind;
+  client_visible: boolean;
+  title: string | null;
+  amount: number | null;
+  currency: string | null;
+  detail: string | null;
+  created_at: string;
+};
+
 /** Shape returned by server actions used with useActionState. */
 export type ActionState = { error?: string; success?: string } | undefined;
 

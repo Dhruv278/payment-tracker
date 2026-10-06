@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { logActivity } from "@/lib/activity";
 import { authorizeDeveloper } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { removeDocuments } from "@/lib/storage";
+import { formatMoney } from "@/lib/format";
 import type { ActionState, PaymentRequest, Profile, Project } from "@/lib/types";
 
 const UNAUTHORIZED: ActionState = { error: "You are not allowed to do that." };
@@ -53,6 +55,15 @@ export async function createProject(_: ActionState, formData: FormData): Promise
     .single();
   if (error) return { error: error.message };
 
+  await logActivity({
+    project_id: data.id,
+    developer_id: dev.id,
+    kind: "project_created",
+    title: parsed.data.name,
+    amount: parsed.data.total_amount,
+    currency: parsed.data.currency,
+  });
+
   revalidatePath("/projects");
   redirect(`/projects/${data.id}`);
 }
@@ -67,9 +78,16 @@ export async function updateProject(_: ActionState, formData: FormData): Promise
   if (!(await isOwnApprovedClient(dev.id, parsed.data.client_id))) return { error: "Choose one of your approved clients." };
 
   const admin = createAdminClient();
-  const { count } = await admin.from("payment_requests").select("id", { count: "exact", head: true }).eq("project_id", project.id);
-  if (count && (parsed.data.currency !== project.currency || parsed.data.client_id !== project.client_id)) {
+  const [{ count: invoices }, { count: notes }] = await Promise.all([
+    admin.from("payment_requests").select("id", { count: "exact", head: true }).eq("project_id", project.id),
+    admin.from("project_notes").select("id", { count: "exact", head: true }).eq("project_id", project.id),
+  ]);
+  if (invoices && (parsed.data.currency !== project.currency || parsed.data.client_id !== project.client_id)) {
     return { error: "Currency and client can't change once payments have been requested." };
+  }
+  // Notes are visible to the project's client, so moving the project would show them to someone else.
+  if (notes && parsed.data.client_id !== project.client_id) {
+    return { error: "The client can't change once the project has notes. Delete the notes first, or create a new project." };
   }
 
   const { error } = await admin
@@ -77,6 +95,19 @@ export async function updateProject(_: ActionState, formData: FormData): Promise
     .update({ ...parsed.data, description: parsed.data.description || null, updated_at: new Date().toISOString() })
     .eq("id", project.id);
   if (error) return { error: error.message };
+
+  const base = { project_id: project.id, developer_id: dev.id, currency: parsed.data.currency };
+  if (parsed.data.status !== project.status) {
+    await logActivity({ ...base, kind: "project_status", title: project.status, detail: parsed.data.status });
+  }
+  if (Number(parsed.data.total_amount) !== Number(project.total_amount)) {
+    await logActivity({
+      ...base,
+      kind: "project_price",
+      amount: parsed.data.total_amount,
+      detail: `was ${formatMoney(project.total_amount, project.currency)}`,
+    });
+  }
 
   revalidatePath(`/projects/${project.id}`);
   redirect(`/projects/${project.id}`);

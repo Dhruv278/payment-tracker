@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createInvoice } from "@/actions/payments";
+import { ActivityFeed } from "@/components/activity-feed";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { PaymentTrack } from "@/components/payment-track";
 import { NewNoteCard, NoteList } from "@/components/project-notes";
 import { ButtonLink, Card, Field, Figure, FigureRow, Input, MilestoneBadge, PageHeader, ProjectBadge, Textarea } from "@/components/ui";
-import { listProjectNotes, summarizeProject, trackMilestones } from "@/lib/queries";
+import { listActivity, listProjectNotes, summarizeProject, trackMilestones } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
 import { displayName, formatDate, formatMoney } from "@/lib/format";
 import type { Milestone, PaymentRequest, Profile, Project } from "@/lib/types";
@@ -26,13 +27,14 @@ export async function generateMetadata({ params }: PageProps<"/projects/[id]">) 
 export default async function ProjectPage({ params }: PageProps<"/projects/[id]">) {
   const { id } = await params;
   const supabase = await createClient();
-  const [{ data: project }, notes] = await Promise.all([
+  const [{ data: project }, notes, history] = await Promise.all([
     supabase
       .from("projects")
       .select("*, client:profiles!projects_client_id_fkey(id, full_name, email, company), milestones(id, title), payment_requests(*)")
       .eq("id", id)
       .maybeSingle<ProjectDetail>(),
     listProjectNotes(id),
+    listActivity({ projectId: id }),
   ]);
   if (!project) notFound();
 
@@ -146,6 +148,9 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           {s.notInvoiced === 0 && s.total > 0 && (
             <p className="mt-3 text-sm text-graphite">The full project price has been invoiced.</p>
           )}
+          <Card title="History" className="mt-6">
+            <ActivityFeed items={history} audience="developer" clientName={displayName(project.client)} />
+          </Card>
         </aside>
       </div>
     </>

@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { submitProof } from "@/actions/payments";
+import { ActivityFeed } from "@/components/activity-feed";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Card, DetailList, Field, Input, MilestoneBadge, Notice, PageHeader, Textarea, buttonStyles, cn } from "@/components/ui";
-import { getPayment } from "@/lib/queries";
+import { getPayment, listActivity } from "@/lib/queries";
 import { signedUrl } from "@/lib/storage";
 import { formatDate, formatMoney, today } from "@/lib/format";
 
@@ -19,7 +20,11 @@ export default async function ClientPaymentPage({ params }: PageProps<"/portal/p
   const payment = await getPayment(id);
   if (!payment) notFound();
 
-  const [invoiceUrl, proofUrl] = await Promise.all([signedUrl(payment.invoice_path), signedUrl(payment.proof_path)]);
+  const [invoiceUrl, proofUrl, history] = await Promise.all([
+    signedUrl(payment.invoice_path),
+    signedUrl(payment.proof_path),
+    listActivity({ paymentRequestId: id }),
+  ]);
   const amount = formatMoney(payment.amount, payment.currency);
   const step = payment.status === "requested" ? 1 : payment.status === "proof_submitted" ? 3 : 4;
 
@@ -135,6 +140,11 @@ export default async function ClientPaymentPage({ params }: PageProps<"/portal/p
               )}
             </dl>
           </Card>
+          {history.length > 0 && (
+            <Card title="History" className="mt-4">
+              <ActivityFeed items={history} audience="client" />
+            </Card>
+          )}
         </aside>
       </div>
     </>

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ActivityFeed } from "@/components/activity-feed";
 import { PaymentTrack } from "@/components/payment-track";
 import { NoteList } from "@/components/project-notes";
 import { Card, Figure, FigureRow, MilestoneBadge, PageHeader, ProjectBadge, buttonStyles } from "@/components/ui";
-import { listProjectNotes, summarizeProject, trackMilestones } from "@/lib/queries";
+import { listActivity, listProjectNotes, summarizeProject, trackMilestones } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { Milestone, PaymentRequest, Project } from "@/lib/types";
@@ -20,9 +21,10 @@ export async function generateMetadata({ params }: PageProps<"/portal/projects/[
 export default async function ClientProjectPage({ params }: PageProps<"/portal/projects/[id]">) {
   const { id } = await params;
   const supabase = await createClient();
-  const [{ data: project }, notes] = await Promise.all([
+  const [{ data: project }, notes, history] = await Promise.all([
     supabase.from("projects").select("*, milestones(id, title), payment_requests(*)").eq("id", id).maybeSingle<ClientProject>(),
     listProjectNotes(id),
+    listActivity({ projectId: id }),
   ]);
   if (!project) notFound();
 
@@ -78,6 +80,10 @@ export default async function ClientProjectPage({ params }: PageProps<"/portal/p
           <NoteList notes={notes} />
         </section>
       )}
+
+      <Card title="History" className="mt-10">
+        <ActivityFeed items={history} audience="client" />
+      </Card>
     </>
   );
 }

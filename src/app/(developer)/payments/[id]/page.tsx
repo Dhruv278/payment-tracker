@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cancelInvoice, rejectProof, updateEarning, verifyPayment } from "@/actions/payments";
+import { cancelInvoice, rejectProof, sendReminder, updateEarning, verifyPayment } from "@/actions/payments";
+import { ActivityFeed } from "@/components/activity-feed";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Card, DetailList, Field, Input, MilestoneBadge, Notice, PageHeader, Select, Textarea } from "@/components/ui";
-import { getPayment } from "@/lib/queries";
+import { getPayment, listActivity } from "@/lib/queries";
 import { signedUrl } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/server";
 import { CURRENCIES, displayName, formatDate, formatMoney, today } from "@/lib/format";
@@ -23,11 +24,13 @@ export default async function PaymentPage({ params }: PageProps<"/payments/[id]"
   if (!payment) notFound();
 
   const supabase = await createClient();
-  const [{ data: earning }, invoiceUrl, proofUrl] = await Promise.all([
+  const [{ data: earning }, invoiceUrl, proofUrl, history] = await Promise.all([
     supabase.from("payment_earnings").select("*").eq("payment_request_id", id).maybeSingle<PaymentEarning>(),
     signedUrl(payment.invoice_path),
     signedUrl(payment.proof_path),
+    listActivity({ paymentRequestId: id }),
   ]);
+  const lastReminder = history.find((a) => a.kind === "invoice_reminder");
   const amount = formatMoney(payment.amount, payment.currency);
 
   return (
@@ -106,6 +109,15 @@ export default async function PaymentPage({ params }: PageProps<"/payments/[id]"
             ]}
           />
           {payment.message && <p className="mt-5 whitespace-pre-line border-l-2 border-rule pl-4 text-sm leading-relaxed text-graphite">{payment.message}</p>}
+          {payment.status === "requested" && (
+            <ActionForm action={sendReminder} className="mt-5 border-t border-rule-soft pt-4">
+              <input type="hidden" name="request_id" value={payment.id} />
+              <p className="text-sm text-graphite">
+                {lastReminder ? `Last reminder sent ${formatDate(lastReminder.created_at)}.` : "No reminder sent yet."} The reminder re-sends the invoice email with the payment link{payment.invoice_path ? " and PDF" : ""}.
+              </p>
+              <SubmitButton variant="secondary" pendingLabel="Sending reminder…">Send payment reminder</SubmitButton>
+            </ActionForm>
+          )}
           {payment.status !== "verified" && (
             <ActionForm action={cancelInvoice} className="mt-5 border-t border-rule-soft pt-4">
               <input type="hidden" name="request_id" value={payment.id} />
@@ -139,6 +151,10 @@ export default async function PaymentPage({ params }: PageProps<"/payments/[id]"
           )}
         </Card>
       </div>
+
+      <Card title="History" className="mt-6">
+        <ActivityFeed items={history} audience="developer" clientName={displayName(payment.client)} />
+      </Card>
     </>
   );
 }

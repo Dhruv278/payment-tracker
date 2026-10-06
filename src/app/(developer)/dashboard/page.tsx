@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { ActivityFeed } from "@/components/activity-feed";
 import { PaymentTrack } from "@/components/payment-track";
 import { ButtonLink, Card, EmptyState, Figure, FigureRow, MoneyLines, PageHeader } from "@/components/ui";
 import { requireDeveloper } from "@/lib/auth";
-import { listClients, listPayments, listProjects, listVerifiedPayments, summarizeProject, trackMilestones } from "@/lib/queries";
+import { listActivity, listClients, listPayments, listProjects, listVerifiedPayments, summarizeProject, trackMilestones } from "@/lib/queries";
 import { displayName, formatDate, formatMoney, formatTotals, sumByCurrency, today } from "@/lib/format";
 
 export const metadata = { title: "Dashboard" };
@@ -13,7 +14,13 @@ export default async function DashboardPage() {
   const monthStart = `${now.slice(0, 7)}-01`;
   const yearStart = `${now.slice(0, 4)}-01-01`;
 
-  const [projects, payments, clients, verified] = await Promise.all([listProjects(), listPayments(), listClients(), listVerifiedPayments({})]);
+  const [projects, payments, clients, verified, activity] = await Promise.all([
+    listProjects(),
+    listPayments(),
+    listClients(),
+    listVerifiedPayments({}),
+    listActivity({ limit: 8 }),
+  ]);
 
   const live = projects.filter((p) => p.status !== "cancelled").map((p) => ({ p, s: summarizeProject(p) }));
   const contracted = sumByCurrency(live, (x) => x.s.total, (x) => x.p.currency);
@@ -106,30 +113,35 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <Card title="Recently received" className="mt-8" actions={<Link href="/reports" className="text-sm text-graphite hover:text-ink">Reports</Link>}>
-        {recent.length === 0 ? (
-          <p className="text-sm text-graphite">Verified payments will show up here with what you actually received.</p>
-        ) : (
-          <ul className="-my-3 divide-y divide-rule-soft">
-            {recent.map((p) => (
-              <li key={p.id}>
-                <Link href={`/payments/${p.id}`} className="group flex items-start justify-between gap-4 py-3">
-                  <div className="min-w-0">
-                    <p className="font-medium group-hover:underline">{p.milestone.title}</p>
-                    <p className="text-sm text-graphite">
-                      {p.project.name}, received {formatDate(p.earning.received_on)}
-                    </p>
-                  </div>
-                  <div className="figures shrink-0 text-right">
-                    <p className="font-semibold text-paid">{formatMoney(p.earning.net_amount, p.earning.net_currency)}</p>
-                    <p className="text-xs text-graphite">client paid {formatMoney(p.amount, p.currency)}</p>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card title="Recently received" actions={<Link href="/reports" className="text-sm text-graphite hover:text-ink">Reports</Link>}>
+          {recent.length === 0 ? (
+            <p className="text-sm text-graphite">Verified payments will show up here with what you actually received.</p>
+          ) : (
+            <ul className="-my-3 divide-y divide-rule-soft">
+              {recent.map((p) => (
+                <li key={p.id}>
+                  <Link href={`/payments/${p.id}`} className="group flex items-start justify-between gap-4 py-3">
+                    <div className="min-w-0">
+                      <p className="font-medium group-hover:underline">{p.milestone.title}</p>
+                      <p className="text-sm text-graphite">
+                        {p.project.name}, received {formatDate(p.earning.received_on)}
+                      </p>
+                    </div>
+                    <div className="figures shrink-0 text-right">
+                      <p className="font-semibold text-paid">{formatMoney(p.earning.net_amount, p.earning.net_currency)}</p>
+                      <p className="text-xs text-graphite">client paid {formatMoney(p.amount, p.currency)}</p>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card title="Recent activity">
+          <ActivityFeed items={activity} audience="developer" clientName="Client" showProject empty="Invoices, payments and notes across your projects will show up here." />
+        </Card>
+      </div>
     </>
   );
 }

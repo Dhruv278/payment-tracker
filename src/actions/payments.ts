@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { logActivity } from "@/lib/activity";
 import { authorizeClient, authorizeDeveloper } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { removeDocuments, uploadDocument } from "@/lib/storage";
@@ -38,6 +39,41 @@ function revalidatePayment(request: Pick<PaymentRequest, "id" | "project_id">) {
   revalidatePath("/payments");
   revalidatePath("/dashboard");
   revalidatePath("/portal");
+}
+
+/** The invoice email to the client, used when the invoice is sent and for reminders. */
+function emailInvoice(
+  request: Pick<PaymentRequest, "id" | "amount" | "currency" | "wise_link" | "invoice_path" | "message">,
+  ctx: { title: string; projectName: string; clientEmail: string; developer: Pick<Profile, "email" | "full_name"> },
+  reminder = false,
+) {
+  const formatted = formatMoney(request.amount, request.currency);
+  const portalPath = `/portal/payments/${request.id}`;
+  // Stored as "<timestamp>-<name>"; attach it under its original name.
+  const fileName = request.invoice_path?.split("/").pop()?.replace(/^\d+-/, "");
+  const intro = reminder
+    ? ["This invoice is still waiting for payment. If you've already paid, please upload the payment confirmation so it can be matched."]
+    : request.message
+      ? [request.message]
+      : [];
+  sendEmail({
+    to: ctx.clientEmail,
+    replyTo: ctx.developer.email,
+    subject: reminder
+      ? `Reminder: ${formatted} due for ${ctx.projectName}`
+      : `Invoice from ${ctx.developer.full_name || "your developer"}: ${formatted} for ${ctx.projectName}`,
+    heading: reminder ? `Reminder: ${ctx.title} for ${ctx.projectName}` : `${ctx.title} for ${ctx.projectName}`,
+    amount: formatted,
+    lines: [
+      ...intro,
+      request.wise_link
+        ? "Pay securely with Wise using the button below. Once the payment is complete, upload the Wise payment confirmation PDF so it can be matched to this invoice."
+        : "The invoice is attached. Once you've paid, upload the payment confirmation PDF so it can be matched to this invoice.",
+    ],
+    cta: request.wise_link ? { label: "Pay with Wise", path: request.wise_link } : { label: "Upload payment confirmation", path: portalPath },
+    secondaryCta: request.wise_link ? { label: "Upload payment confirmation", path: portalPath } : undefined,
+    attachments: request.invoice_path && fileName ? [{ filename: fileName, storagePath: request.invoice_path }] : undefined,
+  });
 }
 
 const optionalUrl = z
@@ -115,26 +151,59 @@ export async function createInvoice(_: ActionState, formData: FormData): Promise
   }
 
   const formatted = formatMoney(amount, project.currency);
-  const portalPath = `/portal/payments/${created.id}`;
-  sendEmail({
-    to: project.client.email,
-    replyTo: dev.email,
-    subject: `Invoice from ${dev.full_name || "your developer"}: ${formatted} for ${project.name}`,
-    heading: `${title} for ${project.name}`,
-    amount: formatted,
-    lines: [
-      ...(message ? [message] : []),
-      wise_link
-        ? "Pay securely with Wise using the button below. Once the payment is complete, upload the Wise payment confirmation PDF so it can be matched to this invoice."
-        : "The invoice is attached. Once you've paid, upload the payment confirmation PDF so it can be matched to this invoice.",
-    ],
-    cta: wise_link ? { label: "Pay with Wise", path: wise_link } : { label: "Upload payment confirmation", path: portalPath },
-    secondaryCta: wise_link ? { label: "Upload payment confirmation", path: portalPath } : undefined,
-    attachments: upload.path && fileName ? [{ filename: fileName, storagePath: upload.path }] : undefined,
+  emailInvoice(
+    { id: created.id, amount, currency: project.currency, wise_link, invoice_path: upload.path, message: message || null },
+    { title, projectName: project.name, clientEmail: project.client.email, developer: dev },
+  );
+  await logActivity({
+    project_id: project.id,
+    developer_id: dev.id,
+    payment_request_id: created.id,
+    kind: "invoice_sent",
+    title,
+    amount,
+    currency: project.currency,
   });
 
   revalidatePayment({ id: created.id, project_id: project.id });
   return { success: `Invoice for ${formatted} sent to ${project.client.full_name || project.client.email}.` };
+}
+
+const REMINDER_GAP_MS = 24 * 60 * 60 * 1000;
+
+/** Emails the invoice again as a reminder. At most one reminder per invoice per 24 hours. */
+export async function sendReminder(_: ActionState, formData: FormData): Promise<ActionState> {
+  const dev = await authorizeDeveloper();
+  if (!dev) return UNAUTHORIZED;
+  const request = await loadRequest(String(formData.get("request_id")));
+  if (!request || request.developer_id !== dev.id) return { error: "Invoice not found." };
+  if (request.status !== "requested") return { error: "Reminders are only for invoices that are waiting for payment." };
+
+  const { data: last } = await createAdminClient()
+    .from("activity")
+    .select("created_at")
+    .eq("payment_request_id", request.id)
+    .eq("kind", "invoice_reminder")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ created_at: string }>();
+  if (last && Date.now() - new Date(last.created_at).getTime() < REMINDER_GAP_MS) {
+    return { error: "A reminder was already sent in the last 24 hours." };
+  }
+
+  emailInvoice(request, { title: request.milestone.title, projectName: request.project.name, clientEmail: request.client.email, developer: dev }, true);
+  await logActivity({
+    project_id: request.project_id,
+    developer_id: dev.id,
+    payment_request_id: request.id,
+    kind: "invoice_reminder",
+    title: request.milestone.title,
+    amount: request.amount,
+    currency: request.currency,
+  });
+
+  revalidatePayment(request);
+  return { success: `Reminder sent to ${request.client.full_name || request.client.email}.` };
 }
 
 export async function cancelInvoice(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -158,6 +227,14 @@ export async function cancelInvoice(_: ActionState, formData: FormData): Promise
       `The invoice "${request.milestone.title}" for ${formatMoney(request.amount, request.currency)} on ${request.project.name} was cancelled. No payment is needed for it.`,
       "If you already paid it, just reply to this email.",
     ],
+  });
+  await logActivity({
+    project_id: request.project_id,
+    developer_id: dev.id,
+    kind: "invoice_cancelled",
+    title: request.milestone.title,
+    amount: request.amount,
+    currency: request.currency,
   });
 
   revalidatePayment(request);
@@ -222,6 +299,16 @@ export async function submitProof(_: ActionState, formData: FormData): Promise<A
     ],
     cta: { label: "Verify payment", path: `/payments/${request.id}` },
   });
+  await logActivity({
+    project_id: request.project_id,
+    developer_id: request.developer_id,
+    payment_request_id: request.id,
+    kind: "proof_submitted",
+    title: request.milestone.title,
+    amount: request.amount,
+    currency: request.currency,
+    detail: parsed.data.client_paid_on,
+  });
 
   revalidatePayment(request);
   return { success: "Thanks! Your payment confirmation was sent for verification." };
@@ -276,6 +363,10 @@ export async function verifyPayment(_: ActionState, formData: FormData): Promise
     lines: [`Your payment of ${amount} for "${request.milestone.title}" (${request.project.name}) has been received and verified.`],
     cta: { label: "View project", path: `/portal/projects/${request.project_id}` },
   });
+  const trail = { project_id: request.project_id, developer_id: dev.id, payment_request_id: request.id, title: request.milestone.title };
+  await logActivity({ ...trail, kind: "payment_verified", amount: request.amount, currency: request.currency });
+  // What actually arrived stays private to the developer.
+  await logActivity({ ...trail, kind: "earning_recorded", client_visible: false, amount: parsed.data.net_amount, currency: parsed.data.net_currency });
 
   revalidatePayment(request);
   revalidatePath("/reports");
@@ -306,6 +397,16 @@ export async function rejectProof(_: ActionState, formData: FormData): Promise<A
     lines: [`Invoice: ${request.milestone.title} (${formatMoney(request.amount, request.currency)})`, reason],
     cta: { label: "Upload new confirmation", path: `/portal/payments/${request.id}` },
   });
+  await logActivity({
+    project_id: request.project_id,
+    developer_id: dev.id,
+    payment_request_id: request.id,
+    kind: "proof_rejected",
+    title: request.milestone.title,
+    amount: request.amount,
+    currency: request.currency,
+    detail: reason,
+  });
 
   revalidatePayment(request);
   return { success: "The client has been asked for a new confirmation." };
@@ -331,6 +432,16 @@ export async function updateEarning(_: ActionState, formData: FormData): Promise
     })
     .eq("payment_request_id", request.id);
   if (error) return { error: error.message };
+  await logActivity({
+    project_id: request.project_id,
+    developer_id: dev.id,
+    payment_request_id: request.id,
+    kind: "earning_updated",
+    client_visible: false,
+    title: request.milestone.title,
+    amount: parsed.data.net_amount,
+    currency: parsed.data.net_currency,
+  });
 
   revalidatePayment(request);
   revalidatePath("/reports");

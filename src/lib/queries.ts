@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import type { ActivityItem } from "@/components/activity-feed";
 import type { TrackMilestone } from "@/components/payment-track";
 import type { Milestone, PaymentEarning, PaymentRequest, Profile, Project, ProjectNote } from "@/lib/types";
 
@@ -115,6 +116,23 @@ export async function listProjectNotes(projectId: string) {
     .eq("project_id", projectId)
     .order("created_at", { ascending: false })
     .returns<ProjectNote[]>();
+  return data ?? [];
+}
+
+/**
+ * History events, newest first. RLS returns everything to the developer and
+ * only client-visible events on their own projects to a client.
+ */
+export async function listActivity(filter: { projectId?: string; paymentRequestId?: string; limit?: number } = {}) {
+  const supabase = await createClient();
+  let query = supabase
+    .from("activity")
+    .select("*, project:projects(name)")
+    .order("created_at", { ascending: false })
+    .limit(filter.limit ?? 100);
+  if (filter.projectId) query = query.eq("project_id", filter.projectId);
+  if (filter.paymentRequestId) query = query.eq("payment_request_id", filter.paymentRequestId);
+  const { data } = await query.returns<ActivityItem[]>();
   return data ?? [];
 }
 
