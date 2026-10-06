@@ -124,6 +124,8 @@ footer{text-align:center;color:var(--graphite);font-size:13px;padding:0 24px 40p
 <p><code>/forgot-password</code> sends a reset link that works on any device. If an invite expires, open the client and use <em>Send a new sign-in link</em>.</p>
 <h3>Adding another developer</h3>
 <p>Add their email to <code>DEVELOPER_EMAILS</code> in Vercel (comma-separated), redeploy, and have them sign up. They start with an empty workspace.</p>
+<h3>Removing a developer</h3>
+<p>Taking an email out of <code>DEVELOPER_EMAILS</code> does <strong>not</strong> remove access: the account stays a developer. Delete the user in Supabase → Authentication → Users (this also deletes their projects, invoices and history), or ask for their projects to be handed over first.</p>
 </section>
 
 <section id="live">
@@ -172,6 +174,7 @@ npx supabase db push        # applies any new files in supabase/migrations</code
 <p>Or paste each new migration file into Supabase → SQL Editor and run it. Backups: Supabase → Database → Backups (daily on paid plans). For a manual copy: <code>npx supabase db dump -f backup.sql</code>.</p>
 <h3>Auth email templates</h3>
 <p><code>supabase/templates/confirmation.html</code> and <code>recovery.html</code> use <code>token_hash</code> links so they work on any device. They are set on the live project (Authentication → Emails → Templates).</p>
+<div class="callout">Change live auth settings (site URL, SMTP, templates) in the Supabase dashboard. Don't run <code>npx supabase config push</code> from this repo: <code>supabase/config.toml</code> holds the <em>local</em> settings (localhost URLs, Mailpit) and would overwrite production.</div>
 </section>
 
 <section id="deploy">
@@ -220,6 +223,8 @@ npm run dev                   # http://localhost:3000</code></pre>
 <tr><td>Wrong amount recorded as received</td><td>Invoice page → <em>Correct this record</em>. The correction appears in history.</td></tr>
 <tr><td>Invoice sent by mistake</td><td>Invoice page → <em>Cancel invoice</em> (until paid). The client gets a cancellation email; history keeps the record.</td></tr>
 <tr><td>Need to move a project to another client</td><td>Only possible before it has invoices or notes, so nothing written for one client is shown to another.</td></tr>
+<tr><td>Can't find an email you sent to yourself</td><td>Gmail often files mail sent from and to the same address under <em>Sent</em> or <em>All Mail</em> instead of the inbox. Real clients get it normally.</td></tr>
+<tr><td>Rotating the Gmail app password</td><td>Update it in <strong>both</strong> places: Vercel <code>GMAIL_APP_PASSWORD</code> (app emails, then redeploy) and Supabase → Authentication → Emails → SMTP (login emails).</td></tr>
 <tr><td>No emails at all</td><td>Check <code>GMAIL_USER</code> / <code>GMAIL_APP_PASSWORD</code> in Vercel and the SMTP settings in Supabase Auth; Vercel → Logs shows <code>[email]</code> errors.</td></tr>
 <tr><td>Site errors after a quiet week</td><td>Supabase free tier paused the project. Dashboard → Restore.</td></tr>
 </table>
