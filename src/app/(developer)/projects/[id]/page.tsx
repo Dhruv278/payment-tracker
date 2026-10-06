@@ -77,7 +77,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
             <div className="rounded-xl border border-dashed border-rule bg-paper/60 px-6 py-10 text-center">
               <p className="font-medium">No invoices yet</p>
               <p className="mx-auto mt-1 max-w-sm text-sm text-graphite">
-                When a part of the work is done, create an invoice for that amount. {displayName(project.client)} gets it by email with your Wise link.
+                When a part of the work is done, create an invoice for that amount. {displayName(project.client)} gets it by email, with your Wise link if you add one.
               </p>
             </div>
           ) : (
@@ -131,7 +131,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
                   required
                 />
               </Field>
-              <Field label="Wise payment link" name="inv_wise" hint="From your Wise invoice or payment request.">
+              <Field label="Wise payment link" name="inv_wise" hint="Optional. From your Wise invoice or payment request.">
                 <Input id="inv_wise" name="wise_link" type="url" placeholder="https://wise.com/pay/…" />
               </Field>
               <Field label="Invoice PDF" name="inv_file" hint="Optional. Attached to the email.">

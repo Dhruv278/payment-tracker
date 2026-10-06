@@ -16,9 +16,9 @@ It works like a bill book:
 
 1. Client signs up and you approve them on **Clients** (or invite them directly).
 2. Create a **Project** for the client with its total price and currency (e.g. $1,600 USD).
-3. When part of the work is done, **Send invoice** from the project page: title, amount (e.g. $400), your Wise payment link and optionally the invoice PDF. The client gets an email with a **Pay with Wise** button, the PDF attached and an **Upload payment confirmation** button.
+3. When part of the work is done, **Send invoice** from the project page: title, amount (e.g. $400), and optionally your Wise payment link and the invoice PDF. The client gets an email with an **Upload payment confirmation** button (plus **Pay with Wise** and the PDF when given).
 4. Client pays and uploads the Wise payment-completed PDF. You get an email.
-5. You **verify** it and record what actually reached you, in any currency (e.g. ₹36,000). Clients never see this. Or ask for a new confirmation.
+5. You **verify** it and record what actually reached you, in any currency (e.g. ₹36,000). Clients never see this. Or ask for a new confirmation. If the money already arrived, you can **mark the invoice paid** yourself without waiting for an upload.
 6. Add **Notes** to a project (meeting summaries, progress updates). The client sees them on their project page; only you can add, edit or delete them.
 7. Each project shows price, invoiced, paid and not-invoiced-yet. **Reports** show billed vs. net earned by client, project and date range (incl. Indian FY presets), with CSV export.
 

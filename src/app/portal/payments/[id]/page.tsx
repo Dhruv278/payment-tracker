@@ -49,7 +49,10 @@ export default async function ClientPaymentPage({ params }: PageProps<"/portal/p
             <p className="text-[0.9375rem] text-graphite">
               {payment.status === "requested" ? (
                 <>
-                  Pay <span className="figures font-semibold text-ink">{amount}</span> using the {payment.wise_link && payment.invoice_path ? "link or invoice" : payment.wise_link ? "link" : "invoice"} below.
+                  Pay <span className="figures font-semibold text-ink">{amount}</span>{" "}
+                  {payment.wise_link || payment.invoice_path
+                    ? `using the ${payment.wise_link && payment.invoice_path ? "link or invoice" : payment.wise_link ? "link" : "invoice"} below.`
+                    : "using the payment details you've agreed on, then upload the confirmation below."}
                 </>
               ) : (
                 <>

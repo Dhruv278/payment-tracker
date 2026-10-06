@@ -57,7 +57,7 @@ footer{text-align:center;color:var(--graphite);font-size:13px;padding:0 24px 40p
 <h2>What it is</h2>
 <p class="lead">One place to bill clients and see where every payment stands, without chasing emails.</p>
 <div class="grid2">
-<div class="card"><h4>Projects &amp; invoices</h4><p>Create a project with its total price and currency. When a piece of work is done, send an invoice for that part: title, amount, your Wise link, optional PDF.</p></div>
+<div class="card"><h4>Projects &amp; invoices</h4><p>Create a project with its total price and currency. When a piece of work is done, send an invoice for that part: title, amount, and optionally your Wise link and the invoice PDF.</p></div>
 <div class="card"><h4>Client portal</h4><p>Clients sign in, see what's due, pay with Wise, and upload the Wise receipt. They see their projects, invoices, notes and history, and nothing else.</p></div>
 <div class="card"><h4>Verification &amp; real earnings</h4><p>You check the transfer and record what actually reached you, in any currency (e.g. client paid $400, you received ₹33,200). Only you see this.</p></div>
 <div class="card"><h4>Notes, history, reminders</h4><p>Meeting notes on each project (optionally emailed), a complete history of every event, and one-click payment reminders.</p></div>
@@ -96,10 +96,10 @@ footer{text-align:center;color:var(--graphite);font-size:13px;padding:0 24px 40p
 <p class="lead">Every invoice moves through three states, and every step is recorded.</p>
 <p><span class="pill due">Sent</span> → <span class="pill review">Confirmation received</span> → <span class="pill paid">Paid</span></p>
 <ol class="steps">
-<li><strong>You send an invoice.</strong> The client gets an email with <em>Pay with Wise</em>, the PDF and an <em>Upload payment confirmation</em> button. History: “Invoice sent”.</li>
+<li><strong>You send an invoice.</strong> The client gets an email with an <em>Upload payment confirmation</em> button, plus <em>Pay with Wise</em> and the PDF if you added them. History: “Invoice sent”.</li>
 <li><strong>Optional reminder.</strong> On an unpaid invoice, <em>Send payment reminder</em> re-sends the invoice email (at most once every 24 hours). History: “Payment reminder sent”.</li>
 <li><strong>Client uploads the Wise receipt.</strong> You get an email. History: “Client uploaded a payment confirmation (paid on …)”.</li>
-<li><strong>You verify or reject.</strong> Rejecting asks the client for a new confirmation with your reason. Verifying marks the invoice Paid and emails the client. History: “Payment confirmed”.</li>
+<li><strong>You verify or reject</strong> (or, if the money already arrived, use <em>Client already paid you?</em> on the invoice to mark it paid without waiting for an upload). Rejecting asks the client for a new confirmation with your reason. Verifying marks the invoice Paid and emails the client. History: “Payment confirmed”.</li>
 <li><strong>You record what you actually received</strong> (any currency, after fees). History: “You received ₹… <span class="pill" style="background:#e8ebf1;color:#5b6475">Private</span>”. You can correct it later; the correction is logged too.</li>
 </ol>
 <p>History also records: project started, status changes, price changes (with the old price), cancelled invoices (the record stays even though the invoice is removed) and notes added. Deleting a note removes its history entry.</p>

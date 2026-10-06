@@ -68,7 +68,9 @@ function emailInvoice(
       ...intro,
       request.wise_link
         ? "Pay securely with Wise using the button below. Once the payment is complete, upload the Wise payment confirmation PDF so it can be matched to this invoice."
-        : "The invoice is attached. Once you've paid, upload the payment confirmation PDF so it can be matched to this invoice.",
+        : request.invoice_path
+          ? "The invoice is attached. Once you've paid, upload the payment confirmation PDF so it can be matched to this invoice."
+          : "Please pay using the payment details you've agreed on. Once you've paid, upload the payment confirmation so it can be matched to this invoice.",
     ],
     cta: request.wise_link ? { label: "Pay with Wise", path: request.wise_link } : { label: "Upload payment confirmation", path: portalPath },
     secondaryCta: request.wise_link ? { label: "Upload payment confirmation", path: portalPath } : undefined,
@@ -113,8 +115,6 @@ export async function createInvoice(_: ActionState, formData: FormData): Promise
   if (project.client.status !== "approved") return { error: "This client's account isn't approved, so they can't open the invoice." };
 
   const invoiceFile = formData.get("invoice");
-  const fileName = invoiceFile instanceof File && invoiceFile.size > 0 ? invoiceFile.name : null;
-  if (!wise_link && !fileName) return { error: "Add your Wise payment link or attach the invoice PDF so the client knows how to pay." };
   const upload = await uploadDocument(invoiceFile, `${dev.id}/${project.id}/invoices`);
   if (upload.error) return { error: upload.error };
 
